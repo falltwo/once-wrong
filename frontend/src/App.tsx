@@ -3,6 +3,7 @@ import { Shell } from "./components/Shell";
 import { ReportsPage } from "./pages/ReportsPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 import { CheckReportPage } from "./pages/CheckReportPage";
+import { TestResultsPage } from "./pages/TestResultsPage";
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
           element={<Navigate to="/reports/reserve-202609" replace />}
         />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/evaluation" element={<TestResultsPage />} />
         <Route path="/reports/:reportId" element={<WorkspacePage />} />
         <Route path="/reports/:reportId/report" element={<CheckReportPage />} />
         <Route

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   ArrowDownToLine,
   Check,
@@ -7,12 +7,14 @@ import {
   CircleHelp,
   Files,
   LayoutDashboard,
+  ChartNoAxesCombined,
   ShieldCheck,
 } from "lucide-react";
 import { Dialog } from "./Dialog";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [help, setHelp] = useState(false);
+  const location = useLocation();
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -26,11 +28,20 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </Link>
         <div className="workspace-label">WORKSPACE</div>
         <nav>
-          <Link to="/reports" className="nav-item active">
+          <NavLink
+            to="/reports"
+            className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
+          >
             <LayoutDashboard size={18} />
             報表檢核
-            <ChevronRight size={14} />
-          </Link>
+          </NavLink>
+          <NavLink
+            to="/evaluation"
+            className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
+          >
+            <ChartNoAxesCombined size={18} />
+            測試結果
+          </NavLink>
         </nav>
         <div className="sidebar-note">
           <ShieldCheck size={24} />
@@ -61,7 +72,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Files size={16} />
             <Link to="/reports">工作空間</Link>
             <ChevronRight size={13} />
-            <span>報表檢核</span>
+            <span>
+              {location.pathname.startsWith("/evaluation")
+                ? "測試結果"
+                : "報表檢核"}
+            </span>
           </div>
           <span className="demo-tag">
             <span />
