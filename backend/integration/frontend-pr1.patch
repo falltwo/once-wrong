@@ -1,0 +1,282 @@
+--- a/frontend/src/types/index.ts
++++ b/frontend/src/types/index.ts
+@@ -14,6 +14,14 @@
+   expected?: number;
+   repeated: boolean;
+ }
++// Optional only so the original frontend demo fixtures still type-check.
++// HTTP backend responses always include these metadata and summary fields.
++export interface ValidationSummary {
++  totalChecks: number;
++  passedChecks: number;
++  failedChecks: number;
++  notEvaluatedChecks: number;
++}
+ export interface Version {
+   id: string;
+   number: number;
+@@ -21,6 +29,12 @@
+   createdAt: string;
+   rows: DataRow[];
+   issues: Issue[];
++  schemaProfileId?: string;
++  ruleVersion?: string;
++  validationStatus?: "completed";
++  validationRunId?: string;
++  sourceSha256?: string;
++  summary?: ValidationSummary;
+ }
+ export interface Report {
+   id: string;
+@@ -28,6 +42,7 @@
+   period: string;
+   versions: Version[];
+   submittedVersionId?: string;
++  canSubmit?: boolean;
+ }
+ export interface Suggestion {
+   explanation: string;
+--- a/frontend/src/pages/WorkspacePage.tsx
++++ b/frontend/src/pages/WorkspacePage.tsx
+@@ -63,8 +63,9 @@
+     : version.issues[0];
+   const repeated = version.issues.filter((i) => i.repeated).length;
+   const submitted = report.submittedVersionId === version.id;
++  const completed = version.validationStatus === "completed";
+   const canSubmit =
+-    version.id === latest.id && !version.issues.length && !submitted;
++    report.canSubmit === true && completed && version.id === latest.id && !submitted;
+   const updateParams = (values: Record<string, string>) =>
+     setParams((old) => {
+       const next = new URLSearchParams(old);
+@@ -142,15 +143,15 @@
+         <div>
+           <span>通過檢核</span>
+           <strong className="text-green">
+-            {version.rows.length * 2 - version.issues.length}
++            {version.summary?.passedChecks ?? "—"}
+             <small>項</small>
+           </strong>
+-          <p>共執行 {version.rows.length * 2} 項規則檢查</p>
++          <p>共執行 {version.summary?.totalChecks ?? "—"} 項規則檢查</p>
+         </div>
+         <div>
+           <span>待修正</span>
+           <strong className="text-red">
+-            {version.issues.length}
++            {version.summary?.failedChecks ?? "—"}
+             <small>項</small>
+           </strong>
+           <p>需要核對與調整</p>
+@@ -165,10 +166,10 @@
+         </div>
+       </section>
+       <div
+-        className={`notice ${version.issues.length ? "blocked" : "passed"}`}
++        className={`notice ${!completed || version.issues.length ? "blocked" : "passed"}`}
+         role="status"
+       >
+-        {version.issues.length ? (
++        {!completed || version.issues.length ? (
+           <LockKeyhole size={20} />
+         ) : (
+           <CircleCheck size={20} />
+@@ -176,10 +177,12 @@
+         <div>
+           <strong>
+             {submitted
+-              ? "已完成模擬送出"
++              ? "已完成內部確認"
+               : version.id !== latest.id
+                 ? "正在檢視歷史版本"
+-                : version.issues.length
++                : !completed
++                  ? "檢核結果尚未就緒"
++                  : version.issues.length
+                   ? "送出已鎖定，請先完成修正"
+                   : "所有示範檢核已通過"}
+           </strong>
+@@ -187,12 +190,14 @@
+             {version.id !== latest.id
+               ? "請切換到最新版本進行送出確認。"
+               : submitted
+-                ? "確認紀錄已保存在此瀏覽器，未送往外部申報系統。"
+-                : repeated
++                ? "確認紀錄已保存在後端，未送往外部申報系統。"
++                : !completed
++                  ? "請等待後端完成檢核；目前不能確認送出。"
++                  : repeated
+                   ? `有 ${repeated} 項錯誤在前後兩版都未通過，請依檢核說明核對來源資料。`
+                   : version.issues.length
+                     ? "修改資料並重新上傳，系統會再次檢查。"
+-                    : "請完成最後人工確認，再進行模擬送出。"}
++                    : "請完成最後人工確認，再記錄內部確認狀態。"}
+           </p>
+         </div>
+         <ShieldCheck className="notice-decoration" size={30} />
+@@ -378,7 +383,7 @@
+           }}
+         >
+           {canSubmit ? <ShieldCheck size={16} /> : <LockKeyhole size={16} />}
+-          {submitted ? "已模擬送出" : "確認送出（模擬）"}
++          {submitted ? "已內部確認" : "確認送出（內部紀錄）"}
+         </button>
+       </div>
+       {upload && (
+@@ -393,7 +398,7 @@
+       )}
+       {confirm && (
+         <Dialog
+-          title="確認模擬送出"
++          title="確認內部送出紀錄"
+           onClose={() => setConfirm(false)}
+           busy={submit.isPending}
+         >
+@@ -402,7 +407,7 @@
+             版已通過示範規則。請確認您已核對來源資料與報表內容。
+           </p>
+           <p className="muted">
+-            此操作只記錄本機確認狀態，不會送往任何外部申報系統。
++            此操作將確認紀錄保存在後端，不會送往任何外部申報系統。
+           </p>
+           {submit.isError && (
+             <p className="error-message" role="alert">
+@@ -422,7 +427,7 @@
+               disabled={submit.isPending}
+               onClick={() => submit.mutate()}
+             >
+-              {submit.isPending ? "確認中…" : "已核對，確認送出"}
++              {submit.isPending ? "確認中…" : "已核對，記錄確認"}
+             </button>
+           </div>
+         </Dialog>
+--- a/frontend/src/pages/CheckReportPage.tsx
++++ b/frontend/src/pages/CheckReportPage.tsx
+@@ -68,8 +68,8 @@
+           {version.filename} · {date(version.createdAt)}
+         </p>
+         <p>
+-          資料共 {version.rows.length} 筆，執行 {version.rows.length * 2}{" "}
+-          項檢核，其中 {version.issues.length} 項未通過。
++          資料共 {version.rows.length} 筆，執行 {version.summary?.totalChecks ?? "—"}{" "}
++          項檢核，其中 {version.summary?.failedChecks ?? "—"} 項未通過。
+         </p>
+         {version.issues.map((issue) => (
+           <div className="record-issue" key={issue.id}>
+@@ -81,7 +81,7 @@
+             </span>
+           </div>
+         ))}
+-        {!version.issues.length && (
++        {version.validationStatus === "completed" && !version.issues.length && (
+           <p className="text-green">所有示範檢核通過。</p>
+         )}
+       </section>
+--- a/frontend/src/features/suggestions/SuggestionPanel.tsx
++++ b/frontend/src/features/suggestions/SuggestionPanel.tsx
+@@ -16,8 +16,12 @@
+ }) {
+   const query = useQuery({
+     queryKey: ["suggestion", versionId, issue.id],
+-    queryFn: () => reportsApi.suggestion(issue),
++    queryFn: () => reportsApi.suggestion(issue, versionId),
+   });
++  const verifiedValue =
++    query.data?.verification === "passed" && typeof query.data.value === "number"
++      ? query.data.value
++      : undefined;
+   const [copied, setCopied] = useState(false);
+   const [copyError, setCopyError] = useState(false);
+   return (
+@@ -70,7 +74,7 @@
+         <div className="ai-title">
+           <Sparkles size={17} />
+           <strong>白話說明</strong>
+-          <span>AI 示範</span>
++          <span>固定範本 · 非 AI</span>
+         </div>
+         {query.isPending ? (
+           <p className="muted" role="status">
+@@ -84,20 +88,20 @@
+         ) : (
+           <>
+             <p className="explanation">{query.data.explanation}</p>
+-            {query.data.value !== undefined ? (
++            {verifiedValue !== undefined ? (
+               <div className="suggestion">
+                 <span className="eyebrow">建議修正值</span>
+-                <strong>{money(query.data.value)}</strong>
++                <strong>{money(verifiedValue)}</strong>
+                 <div className="verified">
+                   <ShieldCheck size={15} />
+-                  示範規則重驗通過
++                  後端規則重驗通過
+                 </div>
+                 <button
+                   className="copy-button"
+                   onClick={async () => {
+                     try {
+                       await navigator.clipboard.writeText(
+-                        String(query.data.value),
++                        String(verifiedValue),
+                       );
+                       setCopied(true);
+                       setCopyError(false);
+@@ -115,7 +119,7 @@
+                 )}
+               </div>
+             ) : (
+-              <div className="neutral-notice">資料不足，沒有可用的修正值。</div>
++              <div className="neutral-notice">目前未提供經重驗的修正值，請核對來源資料。</div>
+             )}
+           </>
+         )}
+--- a/frontend/src/components/Shell.tsx
++++ b/frontend/src/components/Shell.tsx
+@@ -60,7 +60,7 @@
+           <div className="profile">
+             <span className="avatar">OW</span>
+             <div>
+-              展示工作空間<small>前端原型 · 本機資料</small>
++              展示工作空間<small>前後端原型 · 模擬資料</small>
+             </div>
+             <span className="online-dot" />
+           </div>
+@@ -80,7 +80,7 @@
+           </div>
+           <span className="demo-tag">
+             <span />
+-            示範模式
++            後端示範
+           </span>
+         </header>
+         {children}
+@@ -100,7 +100,7 @@
+             ID 與規則判定。
+           </p>
+           <p>
+-            資料僅儲存在目前瀏覽器。AI 說明為示範範本；送出僅記錄本機確認狀態。
++            版本與檢核紀錄儲存在後端。說明使用固定範本；確認僅記錄內部狀態，不會向外部申報。
+           </p>
+           <a className="button secondary" href="/sample-fixed.csv" download>
+             <ArrowDownToLine size={16} />
+--- a/frontend/src/utils/exportReport.ts
++++ b/frontend/src/utils/exportReport.ts
+@@ -6,7 +6,16 @@
+     `OnceWrong-${report.period}-v${version.number}.json`,
+     JSON.stringify(
+       {
+-        mode: "demo",
++        mode: "backend-demo",
++        reportId: report.id,
++        versionId: version.id,
++        schemaProfileId: version.schemaProfileId,
++        ruleVersion: version.ruleVersion,
++        validationStatus: version.validationStatus,
++        validationRunId: version.validationRunId,
++        sourceSha256: version.sourceSha256,
++        summary: version.summary,
++        internallyConfirmed: report.submittedVersionId === version.id,
+         report: report.name,
+         period: report.period,
+         version: version.number,

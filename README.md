@@ -1,5 +1,7 @@
 # Once Wrong
 
+> 後端串接底座已加入：啟動與範圍見 [後端 README](backend/README.md)，介面見 [API 契約](docs/backend-api.md)，已執行的流程見 [驗收紀錄](docs/backend-acceptance.md)。下方保留初始立項說明；可執行功能與限制以上述文件為準。前端原型仍由 [PR #1](https://github.com/falltwo/once-wrong/pull/1) 獨立交付。
+
 Cardif InsurHack 2026 題目 6-2「資料品質與檢核助手」的參賽專案。我們想讓報表在送出前說清楚哪裡錯、怎麼改，也能追蹤同一條規則在不同版本的檢核結果。
 
 ## 預計怎麼做
