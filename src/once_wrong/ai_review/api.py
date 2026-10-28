@@ -70,14 +70,9 @@ class IssueResponse(BaseModel):
     repeated: bool
 
 
-def issue_payloads(
-    report_rows: list[dict[str, Cell]],
-    violations: Iterable[Violation],
-    row_id: RowId = row_number_id,
-    repeated: Callable[[Violation], bool] = lambda v: False,
-) -> list[IssueResponse]:
-    """把規則判定的錯誤轉成 API 格式。`repeated` 由第 5 步「擋重複錯」決定。"""
-    issues: list[IssueResponse] = []
+def issue_ids(violations: Iterable[Violation], row_id: RowId = row_number_id) -> list[str]:
+    """每筆錯誤的 id：`{第一列的 rowId}:{ruleId}`；同一份報表內不重複。"""
+    ids: list[str] = []
     used: set[str] = set()
     for v in violations:
         base = f"{row_id(v.rows[0])}:{v.rule_id}"
@@ -85,6 +80,27 @@ def issue_payloads(
         while issue_id in used:  # 同一條規則從同一列開始報兩次時才會發生
             issue_id, n = f"{base}#{n}", n + 1
         used.add(issue_id)
+        ids.append(issue_id)
+    return ids
+
+
+def find_violation(
+    violations: list[Violation], issue_id: str, row_id: RowId = row_number_id
+) -> Violation | None:
+    """依 API 的 issueId 找回規則判定的那一筆錯誤；找不到回傳 None（端點回 404）。"""
+    return next((v for v, i in zip(violations, issue_ids(violations, row_id)) if i == issue_id), None)
+
+
+def issue_payloads(
+    report_rows: list[dict[str, Cell]],
+    violations: Iterable[Violation],
+    row_id: RowId = row_number_id,
+    repeated: Callable[[Violation], bool] = lambda v: False,
+) -> list[IssueResponse]:
+    """把規則判定的錯誤轉成 API 格式。`repeated` 由第 5 步「擋重複錯」決定。"""
+    violations = list(violations)
+    issues: list[IssueResponse] = []
+    for v, issue_id in zip(violations, issue_ids(violations, row_id)):
         issues.append(
             IssueResponse(
                 id=issue_id,

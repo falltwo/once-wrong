@@ -107,3 +107,34 @@ def test_json_values_keep_precision():
 def test_response_model_is_valid_json_schema():
     schema = SuggestionResponse.model_json_schema()
     assert set(schema["properties"]) == FRONTEND_SUGGESTION_FIELDS
+
+
+def test_find_violation_by_issue_id(life_report, life_rules):
+    from once_wrong.ai_review.api import find_violation
+
+    violations = life_rules.check(life_report)
+    assert find_violation(violations, "6:L0303").rule_id == "L0303"
+    assert find_violation(violations, "6:L0302") is None
+
+
+def test_demo_rules_on_backend_columns_give_backend_issue_ids():
+    """後端 demo_csv_v1 的欄位（id, product, previous, opening）可以直接用示範規則，issueId 跟後端一致。"""
+    from once_wrong.ai_review.api import issue_ids
+    from once_wrong.report import Report
+    from once_wrong.rules import RuleSet
+    from once_wrong.rules.examples import OpeningEqualsClosing, RequiredField
+
+    columns = ["id", "product", "previous", "opening"]
+    rows = [
+        {"id": "ML-01", "product": "WL", "previous": 100, "opening": 100},
+        {"id": "ML-05", "product": "WL", "previous": 12_480_000, "opening": 12_005_000},
+        {"id": "CR-02", "product": "", "previous": 5, "opening": 5},
+    ]
+    report = Report("reserve-202609", 1, columns, rows, numeric_columns={"previous", "opening"})
+    rules = RuleSet([
+        RequiredField(rule_id="R-01", column="product"),
+        OpeningEqualsClosing(rule_id="R-07", closing_column="previous", opening_column="opening"),
+    ])
+    violations = rules.check(report)
+    # 後端 validation.py 的 id 是 f"{row['id']}:R-07"、f"{row['id']}:R-01"
+    assert sorted(issue_ids(violations, lambda r: rows[r - 1]["id"])) == ["CR-02:R-01", "ML-05:R-07"]
