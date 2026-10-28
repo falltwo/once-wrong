@@ -124,3 +124,40 @@ def test_full_report_reviews_every_violation(report, rules):
     llm = FakeLLM([_explain("x") for _ in range(3)])
     items = AIReviewer(llm, rules).review(report)
     assert sorted(i.violation.rule_id for i in items) == ["R-01", "R-07", "R-07"]
+
+
+def test_reference_rows_are_sent_separately(life_report, life_rules):
+    llm = FakeLLM([_explain("x") for _ in range(3)])
+    AIReviewer(llm, life_rules).review(life_report)
+
+    prompt_l0303 = next(p for p in llm.prompts if '"代碼": "L0303"' in p)
+    # 同一保單（A00004）的第 7 列放在「相關資料列」，AI 才看得出這張保單有兩筆
+    assert '"相關資料列"' in prompt_l0303
+    assert "20251001" in prompt_l0303
+    # 其他保單的資料不送
+    assert "A00003" not in prompt_l0303
+
+    prompt_a00003 = next(p for p in llm.prompts if "A00003" in p)
+    assert '"相關資料列"' not in prompt_a00003
+
+
+def test_other_errors_on_same_row_are_sent():
+    from once_wrong.report import Report
+    from once_wrong.rules.life import life_field_rules
+
+    columns = ["公司代號", "保單編號", "保單編號序號", "異動序號", "加保別", "加保日期", "退保別", "退保日期"]
+    report = Report("t", 1, columns, [dict(zip(columns, ("01", "P", "00001", "00000", "XED", "20250112", "XED", "00000000")))])
+    llm = FakeLLM([_explain("x") for _ in range(2)])
+    AIReviewer(llm, life_field_rules()).review(report)
+
+    # 同一列同時錯 L1304、L1502，各自的 prompt 都要看得到另一條
+    prompt_l1304 = next(p for p in llm.prompts if '"代碼": "L1304"' in p)
+    prompt_l1502 = next(p for p in llm.prompts if '"代碼": "L1502"' in p)
+    assert '"同一列的其他錯誤"' in prompt_l1304 and '"規則": "L1502"' in prompt_l1304
+    assert '"規則": "L1304"' in prompt_l1502
+
+
+def test_unrelated_rows_errors_are_not_sent(report, rules):
+    llm = FakeLLM([_explain("x") for _ in range(3)])
+    AIReviewer(llm, rules).review(report)
+    assert all('"同一列的其他錯誤"' not in p for p in llm.prompts)

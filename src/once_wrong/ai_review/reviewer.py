@@ -2,7 +2,7 @@
 
 對每一筆規則判定的錯誤：
 1. 從填報手冊知識庫找出這條規則、相關欄位和代號表的段落，連同團隊備忘一起準備好。
-2. 只把出錯的列和這些段落送給 AI，請它用白話說明並提出修法。
+2. 只把出錯的列（加上規則指定的相關列、同一列的其他錯誤）和這些段落送給 AI，請它用白話說明並提出修法。
 3. 每個修法先套到副本上重跑規則；沒過、或產生新錯的，直接擋下不給人看。
 4. 說明裡的數字對不上資料或引用段落，整段攔下，改用規則的固定說明。
 5. 全部寫進稽核紀錄。
@@ -78,7 +78,8 @@ class AIReviewer:
         rule = self.rules.get(violation.rule_id)
         passages = self.context_for(report, violation)
         notes = self.memory.notes_for(violation.rule_id, report.meta.get(PRODUCT_META_KEY)) if self.memory else []
-        user_prompt = build_user_prompt(report, violation, rule, passages, notes)
+        related = related_violations(violation, before)
+        user_prompt = build_user_prompt(report, violation, rule, passages, notes, related)
         base = {
             "report_id": report.report_id,
             "version": report.version,
@@ -111,6 +112,7 @@ class AIReviewer:
             *(accepted.changes.values() if accepted else []),
             *(p.text for p in cited),
             *(n.note for n in notes),
+            *(v.message for v in related),
         ]
         unsupported = find_unsupported_numbers(shown_texts, allowed_numbers(report, violation, extra))
 
@@ -154,6 +156,11 @@ class AIReviewer:
             source=source,
             suggestion=None,
         )
+
+
+def related_violations(violation: Violation, violations: list[Violation]) -> list[Violation]:
+    """同一列上其他規則判定的錯誤。"""
+    return [v for v in violations if v.key != violation.key and set(v.rows) & set(violation.rows)]
 
 
 def _changes(suggestion: FixSuggestion | None) -> list[dict] | None:

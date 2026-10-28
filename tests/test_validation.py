@@ -53,3 +53,12 @@ def test_fix_that_creates_new_error_is_rejected(report, rules):
 def test_no_op_fix_is_rejected(report, rules):
     outcome = _check(report, rules, "R-07", 3, (3, "本月期初", "12,005,000"))
     assert not outcome.passed
+
+
+def test_editing_reference_row_is_rejected(life_report, life_rules):
+    before = life_rules.check(life_report)
+    [v] = [v for v in before if v.rule_id == "L0303"]
+    candidate = AIFixCandidate(changes=[AIChange(row=7, column="異動序號", new_value="00001")], reason="")
+    outcome = validate_candidate(life_report, v, candidate, life_rules, before)
+    assert not outcome.passed
+    assert "出錯列以外" in outcome.why

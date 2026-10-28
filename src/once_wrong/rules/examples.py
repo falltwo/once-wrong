@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from once_wrong.report import CellRef, Report
 from once_wrong.rules import RuleSet, Violation
+from once_wrong.rules.life import FirstTransactionNotTerminated, TransactionSequence
 
 
 @dataclass
@@ -68,72 +69,6 @@ class OpeningEqualsClosing:
                     )
                 )
         return violations
-
-
-@dataclass
-class TransactionSequence:
-    """個人壽險 L0302：同一保單只有一筆時異動序號=00000；兩筆以上時從 00001 依序編。
-
-    依據：個人壽險填報說明手冊範例與檢核規則 2025，參、欄位檢核「03. 異動序號」。
-    """
-
-    rule_id: str = "L0302"
-    description: str = (
-        "保單只有一筆時，異動序號=00000；保單有兩筆以上異動時，第一筆異動序號=00001，"
-        "其他依序排列，即 00001、00002、00003"
-    )
-
-    def check(self, report: Report) -> list[Violation]:
-        groups: dict[tuple, list[int]] = {}
-        for i, row in enumerate(report.rows, start=1):
-            groups.setdefault((row.get("保單編號"), row.get("保單編號序號")), []).append(i)
-
-        violations = []
-        for (policy, sub), rows in groups.items():
-            expected = ["00000"] if len(rows) == 1 else [f"{n:05d}" for n in range(1, len(rows) + 1)]
-            actual = [str(report.row(r).get("異動序號") or "") for r in rows]
-            if actual != expected:
-                violations.append(
-                    Violation(
-                        rule_id=self.rule_id,
-                        message=(
-                            f"保單 {policy}（序號 {sub}）共 {len(rows)} 筆，異動序號應為 "
-                            f"{'、'.join(expected)}，目前是 {'、'.join(actual)}。"
-                        ),
-                        cells=tuple(CellRef(r, "異動序號") for r in rows),
-                        facts={
-                            "保單編號": policy,
-                            "保單編號序號": sub,
-                            "筆數": len(rows),
-                            "應填異動序號": "、".join(expected),
-                            "目前異動序號": "、".join(actual),
-                        },
-                    )
-                )
-        return violations
-
-
-_L0303_FORBIDDEN = ("DEA", "ADS", "TDI", "ATS", "MAD", "SRD", "RES", "LOP", "TMD", "DDA", "ABD")
-
-
-@dataclass
-class FirstTransactionNotTerminated:
-    """個人壽險 L0303：異動序號=00001 時，退保別不可為 DEA、ADS 等終止類代號。"""
-
-    rule_id: str = "L0303"
-    description: str = "異動序號=“00001”時，退保別不可為 " + "、".join(f"“{c}”" for c in _L0303_FORBIDDEN)
-
-    def check(self, report: Report) -> list[Violation]:
-        return [
-            Violation(
-                rule_id=self.rule_id,
-                message=f"第 {i} 列是這張保單的第一筆異動（00001），退保別不可以填 {row.get('退保別')}。",
-                cells=(CellRef(i, "異動序號"), CellRef(i, "退保別")),
-                facts={"退保別": row.get("退保別")},
-            )
-            for i, row in enumerate(report.rows, start=1)
-            if row.get("異動序號") == "00001" and row.get("退保別") in _L0303_FORBIDDEN
-        ]
 
 
 def life_example_rules() -> RuleSet:

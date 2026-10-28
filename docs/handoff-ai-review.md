@@ -1,6 +1,6 @@
 # 交接：AI 審核（feat/ai-review）
 
-最後更新：2026-10-27。分支 `feat/ai-review`，從 `main`（7dc863f）切出，尚未合併。
+最後更新：2026-10-28。分支 `feat/ai-review`，從 `main`（7dc863f）切出，尚未合併。
 
 ## 背景（換電腦後看這段就夠）
 
@@ -24,8 +24,11 @@
 | Gemini 呼叫 | `ai_review/llm.py` | google-genai SDK，JSON 結構化輸出；失敗時退回固定說明 |
 | 填報手冊知識庫 | `src/once_wrong/kb/` | 五本手冊切成 1,485 段（依章節、欄位、代號表），依檢核編號／欄位／表號檢索 |
 | 團隊規則備忘 | `kb/memory.py`、`config/rule_notes.jsonl` | 團隊確認過的規則解讀，跟手冊段落一起送給 AI |
-| 真實規則範例 | `rules/examples.py` | 個人壽險 L0302、L0303（異動序號），搭配 `examples/mock_life_policies_2025.csv` |
-| 測試 | `tests/` | 34 項，用假的 LLM，不需要金鑰 |
+| 真實規則範例 | `rules/examples.py` | `life_example_rules()`：個人壽險 L0302、L0303（異動序號），搭配 `examples/mock_life_policies_2025.csv` |
+| 個人壽險規則 | `rules/life.py` | `life_field_rules()`：用 8 個承保欄位能檢的 11 條手冊規則（L0302、L0303、L1303、L1304、L1305、L1402、L1502、L1504、L1602、L1607、LU1504） |
+| 相關列與同列錯誤 | `Violation.context_rows`、`reviewer.related_violations` | 多筆規則把同一保單其他筆送給 AI（只能看不能改）；同一列的其他錯誤也一起送，讓 AI 給一次修好的建議 |
+| 評分 | `src/once_wrong/evaluation/` | 產生規則全過的模擬資料，每個案例弄壞一處，跑 Gemini 後跟原值比對。見下方「評分結果」 |
+| 測試 | `tests/` | 109 項，用假的 LLM，不需要金鑰 |
 | 說明文件 | `docs/ai-review.md` | 架構、介面、設定方式的完整說明 |
 
 ## 換電腦後的設定
@@ -59,18 +62,37 @@
    .venv/Scripts/python -m once_wrong.kb.build config/manuals.json
    ```
 
-5. 複製 `.env.example` 成 `.env`，填 `GOOGLE_API_KEY`。用 Google Cloud 專案金鑰時 `GOOGLE_GENAI_USE_VERTEXAI=true`。
+5. 複製 `.env.example` 成 `.env`，填 `GOOGLE_API_KEY`。目前用的是 AI Studio 的金鑰，`GOOGLE_GENAI_USE_VERTEXAI=false`。
+   金鑰開頭是 `AQ.` 的新格式會綁一個服務帳戶；出現 `The bound service account is deleted or disabled` 就是那個帳戶被停用，到 AI Studio 重新產生一把即可。
 
 6. 確認：
 
    ```bash
    .venv/Scripts/python -m pytest
    .venv/Scripts/python -m once_wrong.ai_review.cli examples/mock_life_policies_2025.csv --rules life --product 個人壽險
+   # 評分（39 個案例約 4 分鐘；--dry-run 只產生案例不呼叫 AI）
+   .venv/Scripts/python -m once_wrong.evaluation.run --cases 39
    ```
+
+## 評分結果（2026-10-28，gemini-3.5-flash）
+
+3 組 seed（1、2、3）各 130 個案例，共 595 筆錯誤，沒有呼叫失敗。三組整體處理正確分別 92%、93%、94%。
+
+| 指標 | 結果 |
+|---|---|
+| 整體處理正確（推得出就修回原值，推不出就不給修法） | 554/595（93%） |
+| 推得出原值時，修回原值 | 420/441（95%） |
+| 推不出原值或要動別列時，不亂給修法 | 134/154（87%） |
+| 引用到正確規則的手冊段落 | 595/595（100%） |
+| AI 說明採用率 | 589/595（99%），其餘被數字守門攔下 |
+
+改進過程（同一組 seed 0、60 筆錯誤）：補上同一列的其他錯誤、日期規則把年月日放進 `facts` 後，整體處理正確從 88% 到 93%，數字守門誤擋從 2 筆到 0 筆。
+
+目前的失誤都不是模型能力問題，而是送給 AI 的資料或提示詞，所以**還不需要訓練模型**。
 
 ## 還沒做 / 未驗證
 
-1. **還沒用真的金鑰呼叫過 Gemini。** 用假金鑰確認過請求格式被接受、錯誤會正確退回；但實際回覆品質、模型名稱 `gemini-3.5-flash` 是否可用都還沒驗證（可用 `ONCE_WRONG_MODEL` 換）。這是換電腦後的第一件事。
+1. **AI 為了讓規則通過而改掉事實或自己編日期。** 評分中約 20 次：退保日漏填時把退保別從身故／解約改成 XED（有效），或把不存在的日期改成月底。規則重驗擋不住這類修法（規則過了但資料是錯的）。計畫：提示詞加一條「不可為了通過檢核改掉代表事實的代號、不可自己編日期，缺資料就請人補」，數字守門接受資料中 8 碼日期拆出的年月日；改完用 seed 1、2、3 重跑對照。
 2. **省 token（已討論、尚未實作）。** 實測每筆錯誤約 4,000 token，其中約 75% 是手冊段落；同一條規則錯很多筆時會重複送同一段手冊。計畫：
    - 同一條規則的錯誤合併成一次呼叫（手冊只送一次）
    - 把每條規則的白話說明存起來重用（真正的長期記憶），之後每筆只送出錯的列
@@ -93,7 +115,8 @@
 
 - **套件名稱撞名。** 後端是 `backend/once_wrong/`，本分支是 `src/once_wrong/`，裝在同一個環境會互相蓋掉。整合時建議把本分支的 `ai_review/`、`kb/` 搬進 `backend/once_wrong/` 底下，或把本分支改名（例如 `once_wrong_ai`）。
 - **根目錄檔案。** `.gitignore`、`README.md` 兩邊都有改，合併時要手動整理。
-- **規則介面要統一。** 後端的規則要能產生本分支的 `Violation`（`rule_id`、`message`、`cells`、`facts`），而且 `rule_id` 要用手冊上的檢核編號，知識庫才找得到段落。
+- **規則介面要統一。** 後端的規則要能產生本分支的 `Violation`（`rule_id`、`message`、`cells`、`facts`、選填的 `context_rows`），而且 `rule_id` 要用手冊上的檢核編號，知識庫才找得到段落。多筆規則請把同一保單的其他列放進 `context_rows`。
+- **`rules/life.py` 是讓 AI 審核和評分先跑起來的實作**，正式版本以組員的規則引擎為準；整合時對一下判斷是否一致。
 
 ## 本分支的決定
 

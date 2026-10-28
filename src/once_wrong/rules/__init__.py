@@ -26,6 +26,8 @@ class Violation:
     """出錯的格子。AI 的修法只能改這些格子所在的列。"""
     facts: dict[str, FactValue] = field(default_factory=dict, compare=False, hash=False)
     """程式算好的數字，例如 expected / actual / diff。AI 只能引用這裡和報表上的數字。"""
+    context_rows: tuple[int, ...] = field(default=(), compare=False, hash=False)
+    """給 AI 參考的相關列（例如同一保單的其他筆）。AI 看得到但不能改；不算進 key。"""
 
     @property
     def key(self) -> tuple[str, tuple[CellRef, ...]]:
@@ -35,6 +37,11 @@ class Violation:
     @property
     def rows(self) -> list[int]:
         return sorted({c.row for c in self.cells})
+
+    @property
+    def reference_rows(self) -> list[int]:
+        """只供參考、不在出錯格子裡的列。"""
+        return sorted(set(self.context_rows) - set(self.rows))
 
 
 @runtime_checkable

@@ -44,9 +44,10 @@ def _collect(values: Iterable[object]) -> set[Decimal]:
 
 
 def allowed_numbers(report: Report, violation: Violation, extra: Iterable[object] = ()) -> set[Decimal]:
-    """AI 可以引用的數字：程式算好的數字、出錯列上的值、列號、報表資訊、通過重驗的建議值。"""
-    sources: list[object] = [*violation.facts.values(), *violation.rows, report.version, *report.meta.values()]
-    for r in violation.rows:
+    """AI 可以引用的數字：程式算好的數字、出錯列和相關列上的值、列號、報表資訊、通過重驗的建議值。"""
+    shown_rows = [*violation.rows, *violation.reference_rows]
+    sources: list[object] = [*violation.facts.values(), *shown_rows, report.version, *report.meta.values()]
+    for r in shown_rows:
         sources.extend(report.row(r).values())
     sources.extend(extra)
     return _collect(sources)
