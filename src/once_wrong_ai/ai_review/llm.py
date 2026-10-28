@@ -46,6 +46,7 @@ class GeminiConfig:
     model: str = DEFAULT_MODEL
     use_vertexai: bool = False
     temperature: float = 0.2
+    timeout: float = 30.0
 
     @classmethod
     def from_env(cls) -> GeminiConfig:
@@ -63,10 +64,18 @@ class GeminiConfig:
 class GeminiClient:
     def __init__(self, config: GeminiConfig):
         from google import genai
+        from google.genai import types
 
         self.config = config
         self.model_name = config.model
-        self._client = genai.Client(api_key=config.api_key, vertexai=config.use_vertexai)
+        self._client = genai.Client(
+            api_key=config.api_key,
+            vertexai=config.use_vertexai,
+            http_options=types.HttpOptions(
+                timeout=int(config.timeout * 1000),
+                retry_options=types.HttpRetryOptions(attempts=1),
+            ),
+        )
 
     def explain(self, system_prompt: str, user_prompt: str) -> AIExplanation:
         from google.genai import errors, types

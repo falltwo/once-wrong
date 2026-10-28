@@ -90,7 +90,7 @@ class OpenRouterConfig:
     model: str = DEFAULT_MODEL
     temperature: float | None = None
     reasoning: str | None = None
-    timeout: float = 120.0
+    timeout: float = 30.0
 
     @classmethod
     def from_env(cls) -> OpenRouterConfig:
