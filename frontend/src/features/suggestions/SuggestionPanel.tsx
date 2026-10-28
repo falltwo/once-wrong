@@ -16,8 +16,13 @@ export function SuggestionPanel({
 }) {
   const query = useQuery({
     queryKey: ["suggestion", versionId, issue.id],
-    queryFn: () => reportsApi.suggestion(issue),
+    queryFn: () => reportsApi.suggestion(issue, versionId),
   });
+  const verifiedValue =
+    query.data?.verification === "passed" &&
+    typeof query.data.value === "number"
+      ? query.data.value
+      : undefined;
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
   return (
@@ -70,7 +75,7 @@ export function SuggestionPanel({
         <div className="ai-title">
           <Sparkles size={17} />
           <strong>白話說明</strong>
-          <span>AI 示範</span>
+          <span>固定範本 · 非 AI</span>
         </div>
         {query.isPending ? (
           <p className="muted" role="status">
@@ -84,20 +89,20 @@ export function SuggestionPanel({
         ) : (
           <>
             <p className="explanation">{query.data.explanation}</p>
-            {query.data.value !== undefined ? (
+            {verifiedValue !== undefined ? (
               <div className="suggestion">
                 <span className="eyebrow">建議修正值</span>
-                <strong>{money(query.data.value)}</strong>
+                <strong>{money(verifiedValue)}</strong>
                 <div className="verified">
                   <ShieldCheck size={15} />
-                  示範規則重驗通過
+                  後端規則重驗通過
                 </div>
                 <button
                   className="copy-button"
                   onClick={async () => {
                     try {
                       await navigator.clipboard.writeText(
-                        String(query.data.value),
+                        String(verifiedValue),
                       );
                       setCopied(true);
                       setCopyError(false);
@@ -115,7 +120,9 @@ export function SuggestionPanel({
                 )}
               </div>
             ) : (
-              <div className="neutral-notice">資料不足，沒有可用的修正值。</div>
+              <div className="neutral-notice">
+                目前未提供經重驗的修正值，請核對來源資料。
+              </div>
             )}
           </>
         )}

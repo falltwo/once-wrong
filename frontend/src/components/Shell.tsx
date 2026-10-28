@@ -60,7 +60,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <div className="profile">
             <span className="avatar">OW</span>
             <div>
-              展示工作空間<small>前端原型 · 本機資料</small>
+              展示工作空間<small>前後端原型 · 模擬資料</small>
             </div>
             <span className="online-dot" />
           </div>
@@ -80,13 +80,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </div>
           <span className="demo-tag">
             <span />
-            示範模式
+            後端示範
           </span>
         </header>
         {children}
         <footer className="app-footer">
           <span>Once Wrong · 讓每一次修正，都能被驗證</span>
-          <span>模擬資料與規則 · 未連接正式申報系統</span>
+          <span>後端示範規則 · 僅記錄內部確認，不對外申報</span>
         </footer>
       </div>
       {help && (
@@ -100,7 +100,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             ID 與規則判定。
           </p>
           <p>
-            資料僅儲存在目前瀏覽器。AI 說明為示範範本；送出僅記錄本機確認狀態。
+            版本與檢核紀錄儲存在後端。說明使用固定範本；確認僅記錄內部狀態，不會向外部申報。
           </p>
           <a className="button secondary" href="/sample-fixed.csv" download>
             <ArrowDownToLine size={16} />

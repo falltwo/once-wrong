@@ -14,6 +14,14 @@ export interface Issue {
   expected?: number;
   repeated: boolean;
 }
+// Optional only so the original frontend demo fixtures still type-check.
+// HTTP backend responses always include these metadata and summary fields.
+export interface ValidationSummary {
+  totalChecks: number;
+  passedChecks: number;
+  failedChecks: number;
+  notEvaluatedChecks: number;
+}
 export interface Version {
   id: string;
   number: number;
@@ -21,6 +29,12 @@ export interface Version {
   createdAt: string;
   rows: DataRow[];
   issues: Issue[];
+  schemaProfileId?: string;
+  ruleVersion?: string;
+  validationStatus?: "completed";
+  validationRunId?: string;
+  sourceSha256?: string;
+  summary?: ValidationSummary;
 }
 export interface Report {
   id: string;
@@ -28,6 +42,7 @@ export interface Report {
   period: string;
   versions: Version[];
   submittedVersionId?: string;
+  canSubmit?: boolean;
 }
 export interface Suggestion {
   explanation: string;

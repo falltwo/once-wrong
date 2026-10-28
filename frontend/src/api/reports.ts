@@ -1,43 +1,69 @@
-import Papa from "papaparse";
-import { initialReports } from "../mocks/data";
-import { validate } from "../features/validation/rules";
-import type { DataRow, Issue, Report, Suggestion } from "../types";
+// Copy to frontend/src/api/reports.ts on frontend PR #1, then apply frontend-pr1.patch.
+// This adapter always uses the backend. It never reads localStorage or falls back to mocks.
+import type { Issue, Report, Suggestion, Version } from "../types";
 
-const KEY = "once-wrong-demo-v1";
-const pause = () => new Promise((resolve) => setTimeout(resolve, 450));
-let cache: Report[] | undefined;
-function read(): Report[] {
-  if (cache) return structuredClone(cache);
-  try {
-    const saved = localStorage.getItem(KEY);
-    if (saved) {
-      const parsed: unknown = JSON.parse(saved);
-      if (
-        Array.isArray(parsed) &&
-        parsed.every(
-          (r) =>
-            typeof r.id === "string" &&
-            Array.isArray(r.versions) &&
-            r.versions.length > 0 &&
-            r.versions.every(
-              (v: { rows?: unknown; issues?: unknown }) =>
-                Array.isArray(v.rows) && Array.isArray(v.issues),
-            ),
-        )
-      )
-        cache = parsed;
-    }
-  } catch {
-    /* corrupted/unavailable storage: start a fresh demo */
+const env = (
+  import.meta as ImportMeta & {
+    env?: Record<string, string | boolean | undefined>;
   }
-  cache ??= initialReports();
-  return structuredClone(cache);
+).env;
+const configuredBase = env?.VITE_API_BASE_URL;
+const API_BASE = (
+  typeof configuredBase === "string" && configuredBase.trim()
+    ? configuredBase.trim()
+    : "http://127.0.0.1:8000"
+).replace(/\/+$/, "");
+
+function errorMessage(body: unknown, fallback: string): string {
+  if (!body || typeof body !== "object") return fallback;
+  const payload = body as Record<string, unknown>;
+  if (typeof payload.message === "string") return payload.message;
+  if (typeof payload.detail === "string") return payload.detail;
+  if (Array.isArray(payload.detail)) {
+    const messages = payload.detail.flatMap((item: unknown) => {
+      if (!item || typeof item !== "object") return [];
+      const detail = item as { loc?: unknown; msg?: unknown };
+      if (typeof detail.msg !== "string") return [];
+      const location = Array.isArray(detail.loc) ? detail.loc.join(".") : "";
+      return [location ? `${location}: ${detail.msg}` : detail.msg];
+    });
+    if (messages.length) return messages.join("；");
+  }
+  if (payload.error && typeof payload.error === "object") {
+    const nested = payload.error as { message?: unknown };
+    if (typeof nested.message === "string") return nested.message;
+  }
+  return fallback;
 }
-function save(reports: Report[]) {
-  // Persist before updating memory so failed storage does not report success.
-  localStorage.setItem(KEY, JSON.stringify(reports));
-  cache = structuredClone(reports);
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: { Accept: "application/json", ...init?.headers },
+    });
+  } catch {
+    throw new Error("無法連線到檢核服務，請確認後端已啟動並允許目前前端來源。");
+  }
+  // A successful submission intentionally has no JSON response body.
+  if (response.status === 204 && response.ok) return undefined as T;
+  const text = await response.text();
+  let body: unknown;
+  try {
+    body = text ? JSON.parse(text) : undefined;
+  } catch {
+    if (response.ok) throw new Error("檢核服務回傳非 JSON 資料。");
+  }
+  if (!response.ok) {
+    throw new Error(
+      errorMessage(body, `檢核服務請求失敗（HTTP ${response.status}）。`),
+    );
+  }
+  if (body === undefined) throw new Error("檢核服務沒有回傳預期的資料。");
+  return body as T;
 }
+
 export function download(
   name: string,
   text: string,
@@ -50,102 +76,39 @@ export function download(
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
 export const reportsApi = {
-  async list() {
-    await pause();
-    return read();
+  list(): Promise<Report[]> {
+    return request<Report[]>("/reports");
   },
-  async get(id: string) {
-    await pause();
-    const result = read().find((r) => r.id === id);
-    if (!result) throw new Error("找不到這份報表。");
-    return result;
+  get(id: string): Promise<Report> {
+    return request<Report>(`/reports/${encodeURIComponent(id)}`);
   },
-  async upload(reportId: string, file: File) {
-    if (!file.name.toLowerCase().endsWith(".csv"))
-      throw new Error("目前支援 CSV，請先將 Excel 另存為 CSV UTF-8。");
-    if (file.size > 2 * 1024 * 1024)
-      throw new Error("檔案超過 2 MB，請使用較小的展示資料。");
-    const parsed = Papa.parse<Record<string, string>>(await file.text(), {
-      header: true,
-      skipEmptyLines: "greedy",
-      transformHeader: (h) => h.trim().replace(/^\uFEFF/, ""),
-    });
-    if (parsed.errors.length)
-      throw new Error("CSV 格式不完整，請檢查欄位數量及引號。");
-    const columns = ["id", "product", "previous", "opening"];
-    if (!columns.every((c) => parsed.meta.fields?.includes(c)))
-      throw new Error(
-        "缺少必要欄位：id、product、previous、opening。請下載範例參考。",
-      );
-    if (!parsed.data.length || parsed.data.length > 1000)
-      throw new Error("請上傳 1–1,000 筆資料。");
-    const ids = new Set<string>();
-    const rows: DataRow[] = parsed.data.map((row, index) => {
-      const id = row.id?.trim();
-      if (!id || ids.has(id))
-        throw new Error(
-          `第 ${index + 2} 行的 id 空白或重複。每筆資料需要唯一識別碼。`,
-        );
-      ids.add(id);
-      if (!row.previous?.trim() || !row.opening?.trim())
-        throw new Error(`第 ${index + 2} 行的金額不可空白。`);
-      const previous = Number(row.previous),
-        opening = Number(row.opening);
-      if (
-        !Number.isSafeInteger(previous) ||
-        !Number.isSafeInteger(opening) ||
-        previous < 0 ||
-        opening < 0
-      )
-        throw new Error(
-          `第 ${index + 2} 行的金額須為非負整數（不含千分位逗號）。`,
-        );
-      return { id, product: row.product?.trim() ?? "", previous, opening };
-    });
-    await pause();
-    const reports = read();
-    const report = reports.find((r) => r.id === reportId);
-    if (!report) throw new Error("找不到報表。");
-    const last = report.versions.at(-1)!;
-    const version = {
-      id: crypto.randomUUID(),
-      number: last.number + 1,
-      filename: file.name,
-      createdAt: new Date().toISOString(),
-      rows,
-      issues: validate(rows, last.issues),
-    };
-    report.versions.push(version);
-    report.submittedVersionId = undefined;
-    save(reports);
-    return version;
+  upload(reportId: string, file: File): Promise<Version> {
+    const form = new FormData();
+    form.append("file", file);
+    // The browser sets the multipart boundary. The server parses and validates the file.
+    return request<Version>(
+      `/reports/${encodeURIComponent(reportId)}/versions`,
+      {
+        method: "POST",
+        body: form,
+      },
+    );
   },
-  async suggestion(issue: Issue): Promise<Suggestion> {
-    await pause();
-    if (issue.expected === undefined)
-      return {
-        source: "demo",
-        verification: "unavailable",
-        explanation:
-          "這筆資料缺少險種代碼。請查閱來源資料補上正確代碼；目前資料不足以提供可靠的修正值。",
-      };
-    return {
-      source: "demo",
-      verification: "passed",
-      value: issue.expected,
-      explanation: `本月期初 ${Number(issue.actual).toLocaleString()} 元，與上月期末 ${issue.expected.toLocaleString()} 元不一致，差額為 ${Math.abs(Number(issue.actual) - issue.expected).toLocaleString()} 元。請核對來源資料後，再修改並上傳。`,
-    };
+  suggestion(issue: Issue, versionId: string): Promise<Suggestion> {
+    return request<Suggestion>(
+      `/versions/${encodeURIComponent(versionId)}/issues/${encodeURIComponent(issue.id)}/suggestion`,
+    );
   },
-  async submit(reportId: string, versionId: string) {
-    await pause();
-    const reports = read();
-    const report = reports.find((r) => r.id === reportId);
-    if (!report) throw new Error("找不到報表。");
-    const current = report.versions.at(-1)!;
-    if (current.id !== versionId || current.issues.length)
-      throw new Error("只有最新且全部檢核通過的版本能確認送出。");
-    report.submittedVersionId = current.id;
-    save(reports);
+  submit(reportId: string, versionId: string): Promise<void> {
+    return request<void>(
+      `/reports/${encodeURIComponent(reportId)}/submissions`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ versionId }),
+      },
+    );
   },
 };

@@ -68,8 +68,9 @@ export function CheckReportPage() {
           {version.filename} · {date(version.createdAt)}
         </p>
         <p>
-          資料共 {version.rows.length} 筆，執行 {version.rows.length * 2}{" "}
-          項檢核，其中 {version.issues.length} 項未通過。
+          資料共 {version.rows.length} 筆，執行{" "}
+          {version.summary?.totalChecks ?? "—"} 項檢核，其中{" "}
+          {version.summary?.failedChecks ?? "—"} 項未通過。
         </p>
         {version.issues.map((issue) => (
           <div className="record-issue" key={issue.id}>
@@ -81,7 +82,7 @@ export function CheckReportPage() {
             </span>
           </div>
         ))}
-        {!version.issues.length && (
+        {version.validationStatus === "completed" && !version.issues.length && (
           <p className="text-green">所有示範檢核通過。</p>
         )}
       </section>

@@ -63,8 +63,12 @@ export function Workspace({ report }: { report: Report }) {
     : version.issues[0];
   const repeated = version.issues.filter((i) => i.repeated).length;
   const submitted = report.submittedVersionId === version.id;
+  const completed = version.validationStatus === "completed";
   const canSubmit =
-    version.id === latest.id && !version.issues.length && !submitted;
+    report.canSubmit === true &&
+    completed &&
+    version.id === latest.id &&
+    !submitted;
   const updateParams = (values: Record<string, string>) =>
     setParams((old) => {
       const next = new URLSearchParams(old);
@@ -142,15 +146,15 @@ export function Workspace({ report }: { report: Report }) {
         <div>
           <span>通過檢核</span>
           <strong className="text-green">
-            {version.rows.length * 2 - version.issues.length}
+            {version.summary?.passedChecks ?? "—"}
             <small>項</small>
           </strong>
-          <p>共執行 {version.rows.length * 2} 項規則檢查</p>
+          <p>共執行 {version.summary?.totalChecks ?? "—"} 項規則檢查</p>
         </div>
         <div>
           <span>待修正</span>
           <strong className="text-red">
-            {version.issues.length}
+            {version.summary?.failedChecks ?? "—"}
             <small>項</small>
           </strong>
           <p>需要核對與調整</p>
@@ -165,10 +169,10 @@ export function Workspace({ report }: { report: Report }) {
         </div>
       </section>
       <div
-        className={`notice ${version.issues.length ? "blocked" : "passed"}`}
+        className={`notice ${!completed || version.issues.length ? "blocked" : "passed"}`}
         role="status"
       >
-        {version.issues.length ? (
+        {!completed || version.issues.length ? (
           <LockKeyhole size={20} />
         ) : (
           <CircleCheck size={20} />
@@ -176,23 +180,27 @@ export function Workspace({ report }: { report: Report }) {
         <div>
           <strong>
             {submitted
-              ? "已完成模擬送出"
+              ? "已完成內部確認"
               : version.id !== latest.id
                 ? "正在檢視歷史版本"
-                : version.issues.length
-                  ? "送出已鎖定，請先完成修正"
-                  : "所有示範檢核已通過"}
+                : !completed
+                  ? "檢核結果尚未就緒"
+                  : version.issues.length
+                    ? "送出已鎖定，請先完成修正"
+                    : "所有示範檢核已通過"}
           </strong>
           <p>
             {version.id !== latest.id
               ? "請切換到最新版本進行送出確認。"
               : submitted
-                ? "確認紀錄已保存在此瀏覽器，未送往外部申報系統。"
-                : repeated
-                  ? `有 ${repeated} 項錯誤在前後兩版都未通過，請依檢核說明核對來源資料。`
-                  : version.issues.length
-                    ? "修改資料並重新上傳，系統會再次檢查。"
-                    : "請完成最後人工確認，再進行模擬送出。"}
+                ? "確認紀錄已保存在後端，未送往外部申報系統。"
+                : !completed
+                  ? "請等待後端完成檢核；目前不能確認送出。"
+                  : repeated
+                    ? `有 ${repeated} 項錯誤在前後兩版都未通過，請依檢核說明核對來源資料。`
+                    : version.issues.length
+                      ? "修改資料並重新上傳，系統會再次檢查。"
+                      : "請完成最後人工確認，再記錄內部確認狀態。"}
           </p>
         </div>
         <ShieldCheck className="notice-decoration" size={30} />
@@ -378,7 +386,7 @@ export function Workspace({ report }: { report: Report }) {
           }}
         >
           {canSubmit ? <ShieldCheck size={16} /> : <LockKeyhole size={16} />}
-          {submitted ? "已模擬送出" : "確認送出（模擬）"}
+          {submitted ? "已內部確認" : "確認送出（內部紀錄）"}
         </button>
       </div>
       {upload && (
@@ -393,7 +401,7 @@ export function Workspace({ report }: { report: Report }) {
       )}
       {confirm && (
         <Dialog
-          title="確認模擬送出"
+          title="確認內部送出紀錄"
           onClose={() => setConfirm(false)}
           busy={submit.isPending}
         >
@@ -402,7 +410,7 @@ export function Workspace({ report }: { report: Report }) {
             版已通過示範規則。請確認您已核對來源資料與報表內容。
           </p>
           <p className="muted">
-            此操作只記錄本機確認狀態，不會送往任何外部申報系統。
+            此操作將確認紀錄保存在後端，不會送往任何外部申報系統。
           </p>
           {submit.isError && (
             <p className="error-message" role="alert">
@@ -422,7 +430,7 @@ export function Workspace({ report }: { report: Report }) {
               disabled={submit.isPending}
               onClick={() => submit.mutate()}
             >
-              {submit.isPending ? "確認中…" : "已核對，確認送出"}
+              {submit.isPending ? "確認中…" : "已核對，記錄確認"}
             </button>
           </div>
         </Dialog>
