@@ -1,4 +1,4 @@
-"""Once Wrong demonstration API; this is not an official insurance rulepack."""
+"""Once Wrong report API with scoped rules and optional AI review."""
 
 from .main import create_app
 

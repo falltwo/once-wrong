@@ -1,11 +1,29 @@
-name: Backend
+name: Backend and AI
 
 on:
   push:
     branches: [main]
-    paths: ["backend/**", "docs/backend-api.md", ".github/workflows/backend.yml"]
+    paths:
+      - "backend/**"
+      - "src/**"
+      - "tests/**"
+      - "config/**"
+      - "examples/**"
+      - "pyproject.toml"
+      - "docs/backend-api.md"
+      - "docs/evaluation/**"
+      - ".github/workflows/backend.yml"
   pull_request:
-    paths: ["backend/**", "docs/backend-api.md", ".github/workflows/backend.yml"]
+    paths:
+      - "backend/**"
+      - "src/**"
+      - "tests/**"
+      - "config/**"
+      - "examples/**"
+      - "pyproject.toml"
+      - "docs/backend-api.md"
+      - "docs/evaluation/**"
+      - ".github/workflows/backend.yml"
 
 permissions:
   contents: read
@@ -33,12 +51,16 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
-          cache-dependency-path: backend/pyproject.toml
+          cache-dependency-path: |
+            pyproject.toml
+            backend/pyproject.toml
       - name: Install
-        run: python -m pip install -e ".[dev]"
+        run: python -m pip install -e "..[dev]" -e ".[dev]"
       - name: Dependency consistency
         run: python -m pip check
       - name: Lint
         run: python -m ruff check once_wrong tests
-      - name: Test
+      - name: API tests
         run: python -m pytest -q
+      - name: AI and rule tests
+        run: python -m pytest ../tests -q

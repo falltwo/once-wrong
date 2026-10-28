@@ -1,27 +1,30 @@
-# AI 審核：後端要開的端點
+# AI 審核端點：原始提案與整合狀態
 
-給負責後端的組員。這份規格以 `main` 上的後端（[falltwo/once-wrong#2](https://github.com/falltwo/once-wrong/pull/2)）為基礎，列出接上 AI 審核需要改或新增的端點。回應格式都已經在本分支（`feat/ai-review`）用 pydantic 定義好，後端可以直接 import 當 `response_model`，不用自己重寫。
+2026-10-29：下列端點已在本整合實作，執行中的回應契約以 [backend-api.md](backend-api.md) 為準。本文保留宥勳 `feat/ai-review@ea44b2f` 的原始提案、回應範例與設計理由；其中示意程式不是完整的 app 程式碼。回應模型位於 `once_wrong_ai.ai_review.api`，後端直接共用。
 
-| # | 端點 | 改動 | 優先 |
+| # | 端點 | 改動 | 整合狀態 |
 |---|---|---|---|
-| 1 | `GET /versions/{versionId}/issues/{issueId}/suggestion` | 改：回完整格式，並呼叫 AI 審核 | **最先做**（現在前端讀到會出錯） |
-| 2 | `POST /reports/{reportId}/versions`、`GET /reports/...` | 改：多支援壽險承保資料（任意欄位） | 第二 |
-| 3 | `GET /evaluations/latest` | 新增：回傳 AI 評分結果 | 第三 |
-| 4 | `GET /health` | 改（選做）：回報 AI 是否可用 | 選做 |
+| 1 | `GET /versions/{versionId}/issues/{issueId}/suggestion` | 完整格式、AI 審核、SQLite 快取與失敗退回 | 已實作 |
+| 2 | `POST /reports/{reportId}/versions`、`GET /reports/...` | 支援壽險承保資料（任意欄位） | 已實作；前端任意欄位畫面待接 |
+| 3 | `GET /evaluations/latest` | 回傳 AI 評分結果 JSON | 已實作 |
+| 4 | `GET /health` | 回報 AI 設定與知識庫狀態 | 已實作 |
 
-## 開始之前：套件撞名
+## 安裝與套件名稱
 
-後端套件是 `backend/once_wrong/`，AI 審核是 `src/once_wrong/`，兩個都叫 `once_wrong`，裝在同一個環境會互相蓋掉，後端就 import 不到 AI 審核。**AI 這邊會把 `src/once_wrong` 改名**（暫定 `once_wrong_ai`）。改好之前，下面的 import 先照現在的名稱寫，改名後換掉前綴即可。
+原先兩個套件的 Python import 都叫 `once_wrong`。宥勳原文規劃由 AI 這邊改名，並將 `once_wrong_ai` 列為暫定名稱；本機整合已採此名稱，只保留 `src/once_wrong_ai/` 一份 AI 來源，後端維持 `backend/once_wrong/`。本文 imports 與 CLI 已同步，宥勳的遠端分支未由本次工作修改。
 
-後端的環境要多裝 AI 審核這個套件（在 repo 根目錄 `pip install -e .`），並設定下列環境變數。`ONCE_WRONG_KB`、`ONCE_WRONG_EVALUATION` 是建議後端新增的設定名稱，其餘是 AI 審核已經在讀的（完整說明見 [ai-review.md](ai-review.md)「設定與執行」）：
+pip 安裝名稱與 Python import 是兩個欄位：AI 的 pip 名稱保留上游 `once-wrong`，後端是 `once-wrong-backend`，不另替 AI 決定第二個安裝名稱。AI 改名配套只需採用一次，詳見 [AI 套件交接](ai-package-handoff.md)。
+
+在 repo 根目錄執行 `python -m pip install -e ".[dev]" -e "./backend[dev]"`，同時安裝本機 AI 與後端。完整環境設定見 [backend/README.md](../backend/README.md)；KB、規則備忘與評分檔的相對路徑均以 repo 根目錄解析。
 
 | 環境變數 | 說明 |
 |---|---|
-| `ONCE_WRONG_PROVIDER` | `openrouter`（目前使用）或 `gemini`。建議明確設定，金鑰缺少時才不會改走另一家 |
+| `ONCE_WRONG_PROVIDER` | `openrouter` 或 `gemini`。不設時，有 OpenRouter 金鑰就選 OpenRouter，否則 Gemini |
 | `OPENROUTER_API_KEY` | OpenRouter 金鑰。沒設定時端點照常運作，只是一律回固定說明 |
-| `OPENROUTER_MODEL` | 模型 id，目前用 `openai/gpt-6-luna`（每次呼叫約 US$0.001） |
+| `OPENROUTER_MODEL` | 模型 id，程式預設 `deepseek/deepseek-v4-flash` |
 | `GOOGLE_API_KEY`、`ONCE_WRONG_MODEL` | 改用 Gemini 時才需要 |
 | `ONCE_WRONG_KB` | 填報手冊知識庫資料夾，預設 `data/kb`。手冊不進 git，伺服器上要先建好 |
+| `ONCE_WRONG_RULE_MEMORY` | 團隊規則備忘，預設 `config/rule_notes.jsonl` |
 | `ONCE_WRONG_EVALUATION` | 評分結果 JSON 的路徑，預設 `docs/evaluation/2026-10-28-gemini-3.5-flash.json` |
 
 ---
@@ -32,7 +35,7 @@
 
 ### 回應 200：`SuggestionResponse`
 
-`from once_wrong.ai_review.api import SuggestionResponse`。欄位跟前端 `frontend/src/types/index.ts` 的 `Suggestion` 一致（`tests/test_api.py` 有比對）。
+`from once_wrong_ai.ai_review.api import SuggestionResponse`。欄位跟前端 `frontend/src/types/index.ts` 的 `Suggestion` 一致（`tests/test_api.py` 有比對）。
 
 ```jsonc
 {
@@ -53,7 +56,7 @@
 }
 ```
 
-**現在的問題**：後端目前只回 `{explanation, verification, source: "demo"}`，前端讀 `rejectedSuggestions.length` 會出錯，而且 `"demo"` 不在前端認得的 `source` 裡。**就算還沒接 AI，也要先改成完整格式**：`title` 用規則名稱，`suggestion` 給 `null`，各個陣列給 `[]`，`source` 給 `"fallback_llm_error"`。
+**原先問題（本整合已修正）**：後端只回 `{explanation, verification, source: "demo"}`，前端讀 `rejectedSuggestions.length` 會出錯，`"demo"` 也不在前端認得的 source 裡。現在即使 AI 不可用，仍回完整格式：`title` 用規則名稱、suggestion 為 null、陣列為空，source 為 `fallback_llm_error`。
 
 ### 錯誤
 
@@ -70,9 +73,9 @@
 ```python
 from starlette.concurrency import run_in_threadpool
 
-from once_wrong.ai_review.api import find_violation, suggestion_payload
-from once_wrong.ai_review.reviewer import AIReviewer
-from once_wrong.report import Report
+from once_wrong_ai.ai_review.api import find_violation, suggestion_payload
+from once_wrong_ai.ai_review.reviewer import AIReviewer
+from once_wrong_ai.report import Report
 
 def get_suggestion(version_id: str, issue_id: str):
     cached = store.get_cached_suggestion(version_id, issue_id)
@@ -117,9 +120,9 @@ def get_suggestion(version_id: str, issue_id: str):
 - **AIReviewer 在 `create_app` 時建一次**：
 
   ```python
-  from once_wrong.ai_review.llm import llm_from_env
-  from once_wrong.kb.memory import RuleMemory
-  from once_wrong.kb.search import Retriever
+  from once_wrong_ai.ai_review.llm import llm_from_env
+  from once_wrong_ai.kb.memory import RuleMemory
+  from once_wrong_ai.kb.search import Retriever
 
   reviewer = AIReviewer(
       llm_from_env(), rules,                          # 依 ONCE_WRONG_PROVIDER 建 OpenRouter 或 Gemini
@@ -135,8 +138,8 @@ def get_suggestion(version_id: str, issue_id: str):
 示範規則可以直接用後端的欄位，issueId 跟後端現在的 `f"{row['id']}:R-07"` 完全一致（`tests/test_api.py::test_demo_rules_on_backend_columns_give_backend_issue_ids`）：
 
 ```python
-from once_wrong.rules import RuleSet
-from once_wrong.rules.examples import OpeningEqualsClosing, RequiredField
+from once_wrong_ai.rules import RuleSet
+from once_wrong_ai.rules.examples import OpeningEqualsClosing, RequiredField
 
 demo_rules = RuleSet([
     RequiredField(rule_id="R-01", column="product"),
@@ -166,7 +169,7 @@ R-01／R-07 是團隊自訂的規則，手冊裡沒有，所以這兩條的 `cit
 
 - **辨識方式**：CSV 表頭剛好是這 8 欄就走壽險：`公司代號, 保單編號, 保單編號序號, 異動序號, 加保別, 加保日期, 退保別, 退保日期`。範例檔是 `examples/mock_life_policies_2025.csv`。
 - **所有欄位都當文字**：公司代號 `01`、異動序號 `00001`、日期 `00000000` 都有前置 0，轉成數字就壞了。建 `Report` 時 `numeric_columns=set()`。
-- **規則**：`from once_wrong.rules.life import life_field_rules`，共 11 條。`ruleVersion` 建議用 `life_field_rules_v1`。
+- **規則**：`from once_wrong_ai.rules.life import life_field_rules`，共 11 條。`ruleVersion` 建議用 `life_field_rules_v1`。
 
 ### `Version` 回應（壽險）
 
@@ -182,7 +185,7 @@ R-01／R-07 是團隊自訂的規則，手冊裡沒有，所以這兩條的 `cit
 }
 ```
 
-`issues` 用 `issue_payloads(rows, violations, row_id=str, repeated=...)` 產生（`from once_wrong.ai_review.api import issue_payloads, IssueResponse`）：
+`issues` 用 `issue_payloads(rows, violations, row_id=str, repeated=...)` 產生（`from once_wrong_ai.ai_review.api import issue_payloads, IssueResponse`）：
 
 ```jsonc
 {
@@ -211,7 +214,7 @@ R-01／R-07 是團隊自訂的規則，手冊裡沒有，所以這兩條的 `cit
 
 給前端測試結果頁顯示 AI 評分的實測結果。
 
-- **回應 200**：直接回傳 `ONCE_WRONG_EVALUATION` 指向的 JSON 檔內容，不需要另外轉換。目前的檔案是 [docs/evaluation/2026-10-28-gemini-3.5-flash.json](evaluation/2026-10-28-gemini-3.5-flash.json)，由 `python -m once_wrong.evaluation.run` 產生。
+- **回應 200**：直接回傳 `ONCE_WRONG_EVALUATION` 指向的 JSON 檔內容，不需要另外轉換。目前的檔案是 [docs/evaluation/2026-10-28-gemini-3.5-flash.json](evaluation/2026-10-28-gemini-3.5-flash.json)，由 `python -m once_wrong_ai.evaluation.run` 產生。
 - **回應 404** `EVALUATION_NOT_FOUND`：檔案不存在時。
 
 主要欄位：
@@ -251,4 +254,4 @@ R-01／R-07 是團隊自訂的規則，手冊裡沒有，所以這兩條的 `cit
 
 ## 附帶發現
 
-前端 `reportsApi.create()` 會呼叫 `POST /reports`（建立報表並上傳第一版），但 `main` 上的後端沒有這個端點。這跟 AI 無關，但前端接上後會用到。
+前端 `reportsApi.create()` 需要 `POST /reports`（建立報表並上傳第一版）。本整合已補齊：multipart `name / period / file`，成功回 201 `Report`，報表與第一版原子保存。名稱與期間限制見 [backend-api.md](backend-api.md)。

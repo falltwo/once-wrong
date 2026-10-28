@@ -1,5 +1,7 @@
 # AI 審核模組
 
+2026-10-29 整合註記：AI 套件已改為 `once_wrong_ai`，後端 API 已接上本模組；啟動與端點契約見 [backend/README.md](../backend/README.md) 與 [backend-api.md](backend-api.md)。本文的評分與手冊段落數沿用上游 AI 分支紀錄，本次端點整合未重新產生實測。
+
 負責六步驟裡的第 3、4 步：規則判出錯誤之後，AI 依填報手冊用白話說明，並提出修法；修法先被規則重驗，過了才給人看。
 
 上傳報表（第 1 步）、規則引擎本身、擋重複錯（第 5 步）、送出（第 6 步）不在這個模組。
@@ -32,7 +34,7 @@
 
 Gemini 呼叫失敗時流程不中斷，改顯示規則的固定說明（`source = fallback_llm_error`）。
 
-## 填報手冊知識庫（`once_wrong.kb`）
+## 填報手冊知識庫（`once_wrong_ai.kb`）
 
 五本手冊加起來約 100 萬字，不可能每次整本送給 AI。做法是先切段存起來（長期保存，只建一次），審核時每筆錯誤只挑相關的幾段（預設 6,000 字以內）。
 
@@ -65,7 +67,7 @@ Gemini 呼叫失敗時流程不中斷，改顯示規則的固定說明（`source
 
 ## 給寫規則的人：介面
 
-官方規則寄來之後，每條規則實作 `once_wrong.rules.Rule`，放進 `RuleSet` 就能接上，AI 這層不用改。
+官方規則寄來之後，每條規則實作 `once_wrong_ai.rules.Rule`，放進 `RuleSet` 就能接上，AI 這層不用改。
 
 ```python
 class Rule(Protocol):
@@ -88,7 +90,7 @@ class Rule(Protocol):
 
 報表要在 `meta["險別"]` 填上險別（個人壽險／個人年金／傷害保險／癌症保險），跟 `config/manuals.json` 一致。
 
-範例見 [`src/once_wrong/rules/examples.py`](../src/once_wrong/rules/examples.py)：
+範例見 [`src/once_wrong_ai/rules/examples.py`](../src/once_wrong_ai/rules/examples.py)：
 
 - `life_example_rules()`：手冊上的真實規則 L0302、L0303（個人壽險異動序號），搭配 `examples/mock_life_policies_2025.csv`
 - `example_rules()`：簡報第 8 頁的準備金示意規則，不是主辦方的規則
@@ -97,7 +99,7 @@ class Rule(Protocol):
 
 ```bash
 python -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev]"
+.venv/Scripts/python -m pip install -e ".[dev]" -e "./backend[dev]"
 cp .env.example .env    # 填入 OPENROUTER_API_KEY 或 GOOGLE_API_KEY
 ```
 
@@ -117,13 +119,13 @@ OpenRouter 只會路由到支援 JSON schema、而且不保留資料的供應商
 建立知識庫（手冊放進 `manuals/`，見 [manuals/README.md](../manuals/README.md)）：
 
 ```bash
-.venv/Scripts/python -m once_wrong.kb.build config/manuals.json
+.venv/Scripts/python -m once_wrong_ai.kb.build config/manuals.json
 ```
 
 跑個人壽險範例（第 2–6 列有故意埋的錯）：
 
 ```bash
-.venv/Scripts/python -m once_wrong.ai_review.cli examples/mock_life_policies_2025.csv --rules life --product 個人壽險
+.venv/Scripts/python -m once_wrong_ai.ai_review.cli examples/mock_life_policies_2025.csv --rules life --product 個人壽險
 ```
 
 跑測試（不需要金鑰，用假的 LLM；沒有知識庫時會跳過真實手冊那一項）：
@@ -132,13 +134,13 @@ OpenRouter 只會路由到支援 JSON schema、而且不保留資料的供應商
 .venv/Scripts/python -m pytest
 ```
 
-## 評分（`once_wrong.evaluation`）
+## 評分（`once_wrong_ai.evaluation`）
 
 用程式產生規則全過的個人壽險承保資料（`rules/life.py` 的 11 條規則），每個案例故意弄壞一處，被改掉之前的值就是標準答案，不用人工標註。13 種弄壞方式涵蓋序號、前後筆接續、加退保別與日期。
 
 ```bash
-.venv/Scripts/python -m once_wrong.evaluation.run --cases 39 --dry-run   # 只看會產生哪些案例
-.venv/Scripts/python -m once_wrong.evaluation.run --cases 130 --seed 1   # 實際跑 Gemini
+.venv/Scripts/python -m once_wrong_ai.evaluation.run --cases 39 --dry-run   # 只看會產生哪些案例
+.venv/Scripts/python -m once_wrong_ai.evaluation.run --cases 130 --seed 1   # 實際跑 Gemini
 ```
 
 每筆錯誤依「AI 有沒有機會答對」分三類計分：
@@ -151,7 +153,7 @@ OpenRouter 只會路由到支援 JSON schema、而且不保留資料的供應商
 
 結果寫在 `logs/eval/<時間>/`：`summary.md` 給人看，`summary.json` 給 API／前端用（格式見 [ai-review-api.md](ai-review-api.md)）。多次結果可以用 `--combine` 合併。遇到限流會自動等待重試，避免把「沒打到」算成答錯。最新結果的快照在 [evaluation/](evaluation/)。
 
-後端要提供 AI 說明時，用 `once_wrong.ai_review.api.suggestion_payload` 轉成前端的 `Suggestion` 格式，見 [ai-review-api.md](ai-review-api.md)。
+後端要提供 AI 說明時，用 `once_wrong_ai.ai_review.api.suggestion_payload` 轉成前端的 `Suggestion` 格式，見 [ai-review-api.md](ai-review-api.md)。
 
 ## 資料安全
 

@@ -15,5 +15,5 @@
 放好後建立知識庫（約 1 分鐘）：
 
 ```bash
-.venv/Scripts/python -m once_wrong.kb.build config/manuals.json
+.venv/Scripts/python -m once_wrong_ai.kb.build config/manuals.json
 ```

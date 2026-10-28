@@ -1,6 +1,6 @@
 # 交接：AI 審核（feat/ai-review）
 
-最後更新：2026-10-28。分支 `feat/ai-review`，從 `main`（7dc863f）切出，尚未合併。
+上游紀錄：2026-10-28，來源 `feat/ai-review@ea44b2f`。本文件於 2026-10-29 更新本機整合狀態與套件名稱；不表示宥勳的遠端分支已採用改名。下方評分數字屬上游實測，本次 API 整合沒有重新呼叫付費模型。執行契約以 [backend-api.md](backend-api.md) 為準，命名分工見 [AI 套件交接](ai-package-handoff.md)。
 
 ## 背景（換電腦後看這段就夠）
 
@@ -17,35 +17,35 @@
 
 | 部分 | 位置 | 說明 |
 |---|---|---|
-| 報表與規則介面 | `src/once_wrong/report.py`、`src/once_wrong/rules/` | `Rule.check(report) -> list[Violation]`，組員的規則照這個介面接 |
-| AI 審核流程 | `src/once_wrong/ai_review/reviewer.py` | 每筆錯誤：找手冊段落 → 問 Gemini → 修法重驗 → 數字守門 → 稽核紀錄 |
+| 報表與規則介面 | `src/once_wrong_ai/report.py`、`src/once_wrong_ai/rules/` | `Rule.check(report) -> list[Violation]`，組員的規則照這個介面接 |
+| AI 審核流程 | `src/once_wrong_ai/ai_review/reviewer.py` | 每筆錯誤：找手冊段落 → 問 Gemini → 修法重驗 → 數字守門 → 稽核紀錄 |
 | 修法重驗 | `ai_review/validation.py` | 修法套到副本重跑全部規則；沒修好、產生新錯、改到別列都擋下 |
 | 數字守門 | `ai_review/guard.py` | 說明裡的數字要出現在資料、程式算好的數字或 AI 引用的段落，否則整段改用固定說明 |
 | Gemini 呼叫 | `ai_review/llm.py` | google-genai SDK，JSON 結構化輸出；失敗時退回固定說明 |
-| 填報手冊知識庫 | `src/once_wrong/kb/` | 五本手冊切成 1,485 段（依章節、欄位、代號表），依檢核編號／欄位／表號檢索 |
+| 填報手冊知識庫 | `src/once_wrong_ai/kb/` | 五本手冊切成 1,485 段（依章節、欄位、代號表），依檢核編號／欄位／表號檢索 |
 | 團隊規則備忘 | `kb/memory.py`、`config/rule_notes.jsonl` | 團隊確認過的規則解讀，跟手冊段落一起送給 AI |
 | 真實規則範例 | `rules/examples.py` | `life_example_rules()`：個人壽險 L0302、L0303（異動序號），搭配 `examples/mock_life_policies_2025.csv` |
 | 個人壽險規則 | `rules/life.py` | `life_field_rules()`：用 8 個承保欄位能檢的 11 條手冊規則（L0302、L0303、L1303、L1304、L1305、L1402、L1502、L1504、L1602、L1607、LU1504） |
 | 相關列與同列錯誤 | `Violation.context_rows`、`reviewer.related_violations` | 多筆規則把同一保單其他筆送給 AI（只能看不能改）；同一列的其他錯誤也一起送，讓 AI 給一次修好的建議 |
-| 評分 | `src/once_wrong/evaluation/` | 產生規則全過的模擬資料，每個案例弄壞一處，跑 Gemini 後跟原值比對。見下方「評分結果」 |
+| 評分 | `src/once_wrong_ai/evaluation/` | 產生規則全過的模擬資料，每個案例弄壞一處，跑 Gemini 後跟原值比對。見下方「評分結果」 |
 | API 回應格式 | `ai_review/api.py`、[docs/ai-review-api.md](ai-review-api.md) | 把 AI 審核結果轉成前端 `Suggestion` 的 JSON、任意欄位的錯誤格式；評分輸出 `summary.json`。給後端、前端組員的提案 |
 | 測試 | `tests/` | 117 項，用假的 LLM，不需要金鑰 |
 | 說明文件 | `docs/ai-review.md` | 架構、介面、設定方式的完整說明 |
 
 ## 換電腦後的設定
 
-1. 拉分支：
+1. 取得包含本次整合的分支，並在 repo 根目錄確認目前狀態：
 
    ```bash
    git fetch origin
-   git switch feat/ai-review
+   git status --short
    ```
 
 2. 建環境並安裝：
 
    ```bash
    python -m venv .venv
-   .venv/Scripts/python -m pip install -e ".[dev]"
+   .venv/Scripts/python -m pip install -e ".[dev]" -e "./backend[dev]"
    ```
 
 3. **手冊要另外帶過去**（repo 是公開的，手冊不進 git）。把這五個檔案放進 `manuals/`：
@@ -60,7 +60,7 @@
 4. 建知識庫（約 1 分鐘）：
 
    ```bash
-   .venv/Scripts/python -m once_wrong.kb.build config/manuals.json
+   .venv/Scripts/python -m once_wrong_ai.kb.build config/manuals.json
    ```
 
 5. 複製 `.env.example` 成 `.env`，填 `OPENROUTER_API_KEY`（或 Gemini 的 `GOOGLE_API_KEY`）。
@@ -71,9 +71,9 @@
 
    ```bash
    .venv/Scripts/python -m pytest
-   .venv/Scripts/python -m once_wrong.ai_review.cli examples/mock_life_policies_2025.csv --rules life --product 個人壽險
+   .venv/Scripts/python -m once_wrong_ai.ai_review.cli examples/mock_life_policies_2025.csv --rules life --product 個人壽險
    # 評分（39 個案例約 4 分鐘；--dry-run 只產生案例不呼叫 AI）
-   .venv/Scripts/python -m once_wrong.evaluation.run --cases 39
+   .venv/Scripts/python -m once_wrong_ai.evaluation.run --cases 39
    ```
 
 ## 評分結果（2026-10-28，gemini-3.5-flash）
@@ -99,24 +99,26 @@
    - 同一條規則的錯誤合併成一次呼叫（手冊只送一次）
    - 把每條規則的白話說明存起來重用（真正的長期記憶），之後每筆只送出錯的列
    - 手冊段落只送檢核編號附近幾行，不送整頁
-   - 跟前端約定：使用者點開錯誤時才呼叫 AI
-3. **跟後端整合。** 回應格式已寫成提案 [docs/ai-review-api.md](ai-review-api.md)，待後端實作端點、前端支援任意欄位。另見下一節。
+   - 使用者點開錯誤才呼叫 AI 與同版本同問題的快取，已由本整合實作；批次合併與提示詞縮減仍未實作。
+3. **前端任意欄位。** 後端已支援壽險 rows／cells／facts，前端資料表與錯誤詳情仍須配合；AI 評分需另開區塊呈現，不能與抓錯 precision／recall 混用。另見下一節。
 4. **PDF 抽字的限制。** PDF 表格轉文字換行很亂，AI 看得懂但不漂亮；傷害險 docx 有少數格子的內容抽不出來（文字方塊）。
 5. **待跟組員確認：** 同一條規則第二次失敗時，是「鎖住送出」（簡報第 7、8 頁）還是「提醒」（README）。
 
-## 跟組員的分支整合時要注意
+## 2026-10-29 後端整合狀態
 
-遠端目前還有兩個分支：
+本整合將上游 AI 原始碼與後端接在同一環境：
 
 - `feat/backend-validation-api`：FastAPI 後端，套件放在 `backend/once_wrong/`。
-  - 它有 `GET /versions/{versionId}/issues/{issueId}/suggestion`，目前固定回 `source=demo`、`verification=unavailable`、不呼叫 LLM。**這就是 AI 審核要接上的地方。**
-  - 它的規則是示範用 R-01／R-07，CSV 欄位是 `id, product, previous, opening`，跟本分支的示範欄位（中文欄名）不同。
-- `codex/frontend-prototype`：React 前端，有 `SuggestionPanel`。
+  - 建議端點已回完整 Suggestion，依使用者查詢呼叫 AI 並保存快取；LLM 失敗回固定說明且不快取。
+  - demo 使用 `id, product, previous, opening` 與 R-01／R-07；壽險用 8 欄文字與 11 條規則。
+  - 已補 `POST /reports`、`GET /evaluations/latest`，health 提供 AI 設定狀態。
+- `codex/frontend-prototype`：React 前端已有 SuggestionPanel 與建立報表 API 呼叫；壽險畫面與 AI 評分呈現待前端配合。
 
-衝突點：
+套件與規則邊界：
 
-- **套件名稱撞名。** 後端是 `backend/once_wrong/`，本分支是 `src/once_wrong/`，裝在同一個環境會互相蓋掉。整合時建議把本分支的 `ai_review/`、`kb/` 搬進 `backend/once_wrong/` 底下，或把本分支改名（例如 `once_wrong_ai`）。
-- **根目錄檔案。** `.gitignore`、`README.md` 兩邊都有改，合併時要手動整理。
+- **本機 import 名稱已分開。** 後端為 `once_wrong`，AI 採文件暫定的 `once_wrong_ai`；distribution 分別是 `once-wrong-backend` 與上游原名 `once-wrong`。安裝時同時指定兩個本機路徑。
+- **改名由 AI 端維護一次。** 宥勳維護 AI 的 namespace、內部 imports 與 CLI；後端只配合呼叫同一個 AI 套件。現有 `ai-namespace.patch` 可直接沿用，已完成改名時不再次套用，也不建立第二份 AI 目錄。本次未修改或傳訊至宥勳的遠端分支。
+- **根目錄檔案已整合。** `.gitignore`、`README.md`、`.env.example` 與 CI 已合併兩邊需求。
 - **規則介面要統一。** 後端的規則要能產生本分支的 `Violation`（`rule_id`、`message`、`cells`、`facts`、選填的 `context_rows`），而且 `rule_id` 要用手冊上的檢核編號，知識庫才找得到段落。多筆規則請把同一保單的其他列放進 `context_rows`。
 - **`rules/life.py` 是讓 AI 審核和評分先跑起來的實作**，正式版本以組員的規則引擎為準；整合時對一下判斷是否一致。
 

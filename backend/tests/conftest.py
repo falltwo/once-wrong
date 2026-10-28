@@ -6,6 +6,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from once_wrong.main import create_app
+from once_wrong_ai.ai_review.llm import LLMError
+
+
+class UnavailableLLM:
+    model_name = "test-unavailable"
+
+    def explain(self, system_prompt: str, user_prompt: str):
+        raise LLMError("No provider calls in API tests")
 
 
 @pytest.fixture
@@ -15,7 +23,7 @@ def database_path(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def client(database_path: Path):
-    with TestClient(create_app(database_path, seed_demo=True)) as test_client:
+    with TestClient(create_app(database_path, seed_demo=True, llm=UnavailableLLM())) as test_client:
         yield test_client
 
 

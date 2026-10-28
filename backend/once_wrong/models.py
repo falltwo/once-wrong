@@ -1,8 +1,10 @@
-"""Public contracts compatible with the initial frontend's bounded integer demo."""
+"""Public contracts for the demo and text-preserving life underwriting profiles."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from once_wrong_ai.ai_review.api import IssueResponse, SuggestionResponse
 
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
@@ -32,19 +34,39 @@ class ValidationSummary(BaseModel):
     notEvaluatedChecks: int
 
 
-class Version(BaseModel):
+class VersionBase(BaseModel):
     id: str
     number: int
     filename: str
     createdAt: str
-    rows: list[DataRow]
-    issues: list[Issue]
-    schemaProfileId: Literal["demo_csv_v1"]
-    ruleVersion: Literal["demo_rules_v1"]
     validationStatus: Literal["completed"]
     validationRunId: str
     sourceSha256: str
     summary: ValidationSummary
+
+
+class DemoVersion(VersionBase):
+    rows: list[DataRow]
+    issues: list[Issue]
+    schemaProfileId: Literal["demo_csv_v1"]
+    ruleVersion: Literal["demo_rules_v1"]
+
+
+class LifeDataRow(BaseModel):
+    id: str
+    row: int = Field(ge=1)
+    values: dict[str, str]
+
+
+class LifeVersion(VersionBase):
+    rows: list[LifeDataRow]
+    issues: list[IssueResponse]
+    columns: list[str]
+    schemaProfileId: Literal["life_underwriting_v1"]
+    ruleVersion: Literal["life_field_rules_v1"]
+
+
+Version = Annotated[DemoVersion | LifeVersion, Field(discriminator="schemaProfileId")]
 
 
 class Report(BaseModel):
@@ -56,10 +78,7 @@ class Report(BaseModel):
     canSubmit: bool
 
 
-class Suggestion(BaseModel):
-    explanation: str
-    verification: Literal["unavailable"] = "unavailable"
-    source: Literal["demo"] = "demo"
+Suggestion = SuggestionResponse
 
 
 class SubmissionRequest(BaseModel):
