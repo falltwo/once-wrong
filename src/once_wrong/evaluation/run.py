@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from once_wrong.ai_review.audit import JsonlAuditLog, _default
-from once_wrong.ai_review.llm import GeminiClient, GeminiConfig, LLMClient, LLMError
+from once_wrong.ai_review.llm import LLMClient, LLMError, llm_from_env
 from once_wrong.ai_review.models import AIExplanation, ExplanationSource, ReviewItem
 from once_wrong.ai_review.reviewer import AIReviewer, related_violations
 from once_wrong.evaluation.cases import Case, make_cases
@@ -421,7 +421,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        llm = RetryingLLM(GeminiClient(GeminiConfig.from_env()))
+        llm = RetryingLLM(llm_from_env())
     except LLMError as e:
         print(e, file=sys.stderr)
         return 2
@@ -466,11 +466,15 @@ def main(argv: list[str] | None = None) -> int:
         "seed": args.seed, "cases": len(cases), "policies": args.policies,
         "violations": len(scores), "model": llm.model_name, "elapsedSeconds": elapsed,
     }
+    if usage := getattr(llm.llm, "usage", None):
+        meta["usage"] = usage.as_dict()
     (out / "run.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     summary = write_results(out, scores, len(cases), llm.model_name, [meta], f"耗時 {elapsed} 秒，seed={args.seed}。")
 
     print()
     print(summary)
+    if usage := getattr(llm.llm, "usage", None):
+        print(f"用量：{usage.summary()}")
     print(f"結果：{out}")
     return 0
 

@@ -1,4 +1,4 @@
-"""示範指令：讀一份 CSV 報表，跑示範規則，再請 Gemini 說明每個錯誤。
+"""示範指令：讀一份 CSV 報表，跑示範規則，再請 LLM（Gemini 或 OpenRouter）說明每個錯誤。
 
     # 準備金月報（簡報第 8 頁的示意）
     python -m once_wrong.ai_review.cli examples/mock_reserve_2026-09.csv --period 2026-09
@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from once_wrong.ai_review.audit import JsonlAuditLog
-from once_wrong.ai_review.llm import GeminiClient, GeminiConfig, LLMError
+from once_wrong.ai_review.llm import LLMError, llm_from_env
 from once_wrong.ai_review.models import ExplanationSource
 from once_wrong.ai_review.reviewer import PRODUCT_META_KEY, AIReviewer
 from once_wrong.kb.memory import RuleMemory
@@ -50,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     report = Report.from_csv(args.csv, version=args.version, meta=meta)
 
     try:
-        llm = GeminiClient(GeminiConfig.from_env())
+        llm = llm_from_env()
     except LLMError as e:
         print(e, file=sys.stderr)
         return 2
@@ -88,6 +88,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  依據：{p.source}")
         print()
 
+    if usage := getattr(llm, "usage", None):
+        print(f"用量：{usage.summary()}")
     print(f"稽核紀錄：{args.audit}")
     return 0
 

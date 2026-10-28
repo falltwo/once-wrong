@@ -13,13 +13,14 @@
 
 後端套件是 `backend/once_wrong/`，AI 審核是 `src/once_wrong/`，兩個都叫 `once_wrong`，裝在同一個環境會互相蓋掉，後端就 import 不到 AI 審核。**AI 這邊會把 `src/once_wrong` 改名**（暫定 `once_wrong_ai`）。改好之前，下面的 import 先照現在的名稱寫，改名後換掉前綴即可。
 
-後端的環境要多裝 AI 審核這個套件（在 repo 根目錄 `pip install -e .`），並設定下列環境變數。前三個是 AI 審核已經在讀的；`ONCE_WRONG_KB`、`ONCE_WRONG_EVALUATION` 是建議後端新增的設定名稱：
+後端的環境要多裝 AI 審核這個套件（在 repo 根目錄 `pip install -e .`），並設定下列環境變數。`ONCE_WRONG_KB`、`ONCE_WRONG_EVALUATION` 是建議後端新增的設定名稱，其餘是 AI 審核已經在讀的（完整說明見 [ai-review.md](ai-review.md)「設定與執行」）：
 
 | 環境變數 | 說明 |
 |---|---|
-| `GOOGLE_API_KEY` | Gemini 金鑰。沒設定時端點照常運作，只是一律回固定說明 |
-| `GOOGLE_GENAI_USE_VERTEXAI` | 用 AI Studio 的金鑰時是 `false` |
-| `ONCE_WRONG_MODEL` | 模型名稱，預設 `gemini-3.5-flash` |
+| `ONCE_WRONG_PROVIDER` | `openrouter`（目前使用）或 `gemini`。建議明確設定，金鑰缺少時才不會改走另一家 |
+| `OPENROUTER_API_KEY` | OpenRouter 金鑰。沒設定時端點照常運作，只是一律回固定說明 |
+| `OPENROUTER_MODEL` | 模型 id，目前用 `openai/gpt-6-luna`（每次呼叫約 US$0.001） |
+| `GOOGLE_API_KEY`、`ONCE_WRONG_MODEL` | 改用 Gemini 時才需要 |
 | `ONCE_WRONG_KB` | 填報手冊知識庫資料夾，預設 `data/kb`。手冊不進 git，伺服器上要先建好 |
 | `ONCE_WRONG_EVALUATION` | 評分結果 JSON 的路徑，預設 `docs/evaluation/2026-10-28-gemini-3.5-flash.json` |
 
@@ -116,18 +117,18 @@ def get_suggestion(version_id: str, issue_id: str):
 - **AIReviewer 在 `create_app` 時建一次**：
 
   ```python
-  from once_wrong.ai_review.llm import GeminiClient, GeminiConfig
+  from once_wrong.ai_review.llm import llm_from_env
   from once_wrong.kb.memory import RuleMemory
   from once_wrong.kb.search import Retriever
 
   reviewer = AIReviewer(
-      GeminiClient(GeminiConfig.from_env()), rules,
+      llm_from_env(), rules,                          # 依 ONCE_WRONG_PROVIDER 建 OpenRouter 或 Gemini
       knowledge=Retriever.from_dir(kb_dir),           # 知識庫不存在時傳 None，AI 照樣說明，只是沒有手冊依據
       memory=RuleMemory("config/rule_notes.jsonl"),
   )
   ```
 
-  `GeminiConfig.from_env()` 找不到金鑰時會丟 `LLMError`。這時改用一個一律丟 `LLMError` 的假 client，端點就會自動回固定說明。
+  `llm_from_env()` 找不到金鑰或設定錯誤時會丟 `LLMError`。這時改用一個一律丟 `LLMError` 的假 client，端點就會自動回固定說明。
 
 ### demo 報表（`demo_csv_v1`）也能接 AI
 

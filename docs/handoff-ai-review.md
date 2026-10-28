@@ -63,8 +63,9 @@
    .venv/Scripts/python -m once_wrong.kb.build config/manuals.json
    ```
 
-5. 複製 `.env.example` 成 `.env`，填 `GOOGLE_API_KEY`。目前用的是 AI Studio 的金鑰，`GOOGLE_GENAI_USE_VERTEXAI=false`。
-   金鑰開頭是 `AQ.` 的新格式會綁一個服務帳戶；出現 `The bound service account is deleted or disabled` 就是那個帳戶被停用，到 AI Studio 重新產生一把即可。
+5. 複製 `.env.example` 成 `.env`，填 `OPENROUTER_API_KEY`（或 Gemini 的 `GOOGLE_API_KEY`）。
+   2026-10-28 的評分用掉了 Gemini 的全部抵免額（gemini-3.5-flash 每次呼叫約 NT$0.44），之後改用 OpenRouter 上較便宜的模型，模型在 `OPENROUTER_MODEL` 換。
+   Gemini 的金鑰開頭是 `AQ.` 的新格式會綁一個服務帳戶；出現 `The bound service account is deleted or disabled` 就是那個帳戶被停用，到 AI Studio 重新產生一把即可。
 
 6. 確認：
 

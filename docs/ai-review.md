@@ -98,14 +98,21 @@ class Rule(Protocol):
 ```bash
 python -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev]"
-cp .env.example .env    # 填入 GOOGLE_API_KEY
+cp .env.example .env    # 填入 OPENROUTER_API_KEY 或 GOOGLE_API_KEY
 ```
 
 | 環境變數 | 說明 |
 |---|---|
+| `ONCE_WRONG_PROVIDER` | `openrouter` 或 `gemini`；不設時，有 `OPENROUTER_API_KEY` 就用 OpenRouter |
+| `OPENROUTER_API_KEY` | OpenRouter 的 API 金鑰 |
+| `OPENROUTER_MODEL` | OpenRouter 的模型 id，預設 `deepseek/deepseek-v4-flash`；要支援 structured outputs |
+| `OPENROUTER_REASONING` | 思考強度 `low`／`medium`／`high`，不設用模型預設。思考 token 按輸出計費 |
+| `OPENROUTER_TEMPERATURE` | 不設就不送。推理模型（例如 `openai/gpt-6-luna`）不接受，送了會找不到供應商（404） |
 | `GOOGLE_API_KEY` | Google Cloud 或 AI Studio 的 API 金鑰 |
 | `GOOGLE_GENAI_USE_VERTEXAI` | `true` 走 Vertex AI（Google Cloud 專案的金鑰），`false` 走 Gemini API |
-| `ONCE_WRONG_MODEL` | 模型名稱，預設 `gemini-3.5-flash` |
+| `ONCE_WRONG_MODEL` | Gemini 的模型名稱，預設 `gemini-3.5-flash` |
+
+OpenRouter 只會路由到支援 JSON schema、而且不保留資料的供應商。示範指令和評分結束時會印出 token 數和費用（美元），評分的 `run.json` 也會記下 `usage`。
 
 建立知識庫（手冊放進 `manuals/`，見 [manuals/README.md](../manuals/README.md)）：
 

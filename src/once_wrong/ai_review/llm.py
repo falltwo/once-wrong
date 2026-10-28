@@ -1,7 +1,10 @@
-"""呼叫 Gemini。
+"""呼叫 LLM：Gemini（google-genai）或 OpenRouter（見 openrouter.py）。
 
-金鑰與模型都從環境變數讀（可放在專案根目錄的 .env，見 .env.example）：
+用哪一家由 `llm_from_env()` 依環境變數決定（可放在專案根目錄的 .env，見 .env.example）：
 
+- ONCE_WRONG_PROVIDER：gemini 或 openrouter；不設時，有 OPENROUTER_API_KEY 就用 openrouter，否則 gemini
+
+Gemini：
 - GOOGLE_API_KEY：Google Cloud / AI Studio 的 API 金鑰
 - GOOGLE_GENAI_USE_VERTEXAI：設為 true 時走 Vertex AI（用 API 金鑰的 express mode）
 - ONCE_WRONG_MODEL：模型名稱，預設 gemini-3.5-flash
@@ -22,6 +25,15 @@ class LLMError(RuntimeError):
     pass
 
 
+def _load_dotenv() -> None:
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except ImportError:
+        pass
+
+
 class LLMClient(Protocol):
     model_name: str
 
@@ -37,12 +49,7 @@ class GeminiConfig:
 
     @classmethod
     def from_env(cls) -> GeminiConfig:
-        try:
-            from dotenv import load_dotenv
-
-            load_dotenv()
-        except ImportError:
-            pass
+        _load_dotenv()
         api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
         if not api_key:
             raise LLMError("找不到 GOOGLE_API_KEY，請在 .env 或環境變數設定")
@@ -84,3 +91,18 @@ class GeminiClient:
             return AIExplanation.model_validate_json(response.text or "")
         except ValueError as e:
             raise LLMError(f"Gemini 回傳格式不符：{response.text!r}") from e
+
+
+def llm_from_env() -> LLMClient:
+    """依 ONCE_WRONG_PROVIDER 建立 LLM client；金鑰缺少或設定錯誤時丟 LLMError。"""
+    _load_dotenv()
+    provider = (os.environ.get("ONCE_WRONG_PROVIDER") or "").strip().lower()
+    if not provider:
+        provider = "openrouter" if os.environ.get("OPENROUTER_API_KEY") else "gemini"
+    if provider == "openrouter":
+        from once_wrong.ai_review.openrouter import OpenRouterClient, OpenRouterConfig
+
+        return OpenRouterClient(OpenRouterConfig.from_env())
+    if provider == "gemini":
+        return GeminiClient(GeminiConfig.from_env())
+    raise LLMError(f"ONCE_WRONG_PROVIDER 只能是 gemini 或 openrouter，收到 {provider!r}")
