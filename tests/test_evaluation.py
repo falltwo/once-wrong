@@ -91,3 +91,53 @@ def test_date_shown_via_other_error_on_same_row_is_inferable():
     v = next(v for v in violations if v.rule_id == "L1504")
     assert score_item(case, _item(case, v)).answer == "unknowable"
     assert score_item(case, _item(case, v), violations).answer == "inferable"
+
+
+def _score(answer, *, restored=False, has_fix=False, source="ai", rule_id="L1305"):
+    from once_wrong.evaluation.run import ItemScore
+
+    return ItemScore(
+        case_id="c", mutation="m", rule_id=rule_id, rows=[1], source=source, answer=answer,
+        has_fix=has_fix or restored, restored=restored, other_fix=has_fix and not restored,
+        abstained=not (has_fix or restored), all_blocked=False, rejected=0, cited_rule=True,
+        blocked_numbers=[], title="", explanation="", suggestion=None,
+    )
+
+
+def test_summary_json_counts_correct_handling():
+    from once_wrong.evaluation.run import summary_json
+
+    scores = [
+        _score("inferable", restored=True),
+        _score("inferable", has_fix=True),  # 另一種修法：不算處理正確
+        _score("unknowable"),  # 沒給修法：處理正確
+        _score("unknowable", has_fix=True, rule_id="L1402"),  # 用猜的
+        _score("inferable", source="fallback_llm_error"),  # 呼叫失敗不算進修法
+    ]
+    m = summary_json(scores, n_cases=3, model="m", runs=[])["metrics"]
+    assert m["handledCorrectly"] == {"count": 2, "total": 4, "rate": 0.5}
+    assert m["restoredWhenInferable"]["total"] == 2
+    assert m["heldBackWhenNotInferable"] == {"count": 1, "total": 2, "rate": 0.5}
+    assert m["llmErrors"]["count"] == 1
+
+
+def test_combine_merges_runs(tmp_path):
+    import json
+    from dataclasses import asdict
+
+    from once_wrong.evaluation.run import combine
+
+    dirs = []
+    for seed, scores in [(1, [_score("inferable", restored=True)]), (2, [_score("unknowable", has_fix=True)])]:
+        d = tmp_path / f"run{seed}"
+        d.mkdir()
+        (d / "items.jsonl").write_text("\n".join(json.dumps(asdict(s)) for s in scores), encoding="utf-8")
+        (d / "run.json").write_text(json.dumps({"seed": seed, "cases": 1, "model": "m"}), encoding="utf-8")
+        dirs.append(d)
+
+    out = combine(dirs, tmp_path)
+    payload = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    assert payload["dataset"] == {**payload["dataset"], "cases": 2, "violations": 2}
+    assert [r["seed"] for r in payload["runs"]] == [1, 2]
+    assert payload["metrics"]["handledCorrectly"]["count"] == 1
+    assert (out / "summary.md").exists()

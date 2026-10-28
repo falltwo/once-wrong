@@ -142,7 +142,9 @@ cp .env.example .env    # 填入 GOOGLE_API_KEY
 | 推不出原值 | 資料裡沒有答案（例如漏填的日期是哪一天） | 不給修法，請人確認 |
 | 要動到別列 | 要改 AI 不能改的列才修得好 | 不給修法，請人確認 |
 
-結果寫在 `logs/eval/<時間>/summary.md`。遇到限流會自動等待重試，避免把「沒打到」算成答錯。
+結果寫在 `logs/eval/<時間>/`：`summary.md` 給人看，`summary.json` 給 API／前端用（格式見 [ai-review-api.md](ai-review-api.md)）。多次結果可以用 `--combine` 合併。遇到限流會自動等待重試，避免把「沒打到」算成答錯。最新結果的快照在 [evaluation/](evaluation/)。
+
+後端要提供 AI 說明時，用 `once_wrong.ai_review.api.suggestion_payload` 轉成前端的 `Suggestion` 格式，見 [ai-review-api.md](ai-review-api.md)。
 
 ## 資料安全
 

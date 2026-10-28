@@ -6,8 +6,11 @@
     # 實際評分（每筆錯誤一次 Gemini 呼叫）
     python -m once_wrong.evaluation.run --cases 39 --workers 4
 
-結果寫在 logs/eval/<時間>/：summary.md（摘要）、items.jsonl（每筆錯誤的評分）、
-cases.jsonl（案例與標準答案）、audit.jsonl（AI 原始回覆）。
+    # 合併多次結果（例如不同 seed），不呼叫 AI
+    python -m once_wrong.evaluation.run --combine logs/eval/A logs/eval/B logs/eval/C
+
+結果寫在 logs/eval/<時間>/：summary.md（摘要）、summary.json（給 API／前端用）、run.json（這次的設定）、
+items.jsonl（每筆錯誤的評分）、cases.jsonl（案例與標準答案）、audit.jsonl（AI 原始回覆）。
 
 每筆錯誤的判定：
 - 推得出原值：被弄壞的格子在 AI 可以改的列上，而且送給 AI 的資料裡有線索推回原值
@@ -176,26 +179,43 @@ def _what(s: ItemScore) -> str:
     return "全被擋下" if s.all_blocked else "沒給修法"
 
 
-def summarize(scores: list[ItemScore], cases: list[Case], model: str) -> str:
-    ai = [s for s in scores if s.source == ExplanationSource.AI.value]
-    llm_errors = sum(s.source == ExplanationSource.FALLBACK_LLM_ERROR.value for s in scores)
-    guarded = [s for s in scores if s.source == ExplanationSource.FALLBACK_NUMBER_GUARD.value]
-    # 修法相關只看 AI 有回覆的（數字守門攔下的說明也算有回覆，修法仍保留）
-    answered = [s for s in scores if s.source != ExplanationSource.FALLBACK_LLM_ERROR.value]
-    inferable = [s for s in answered if s.answer == "inferable"]
-    unknowable = [s for s in answered if s.answer == "unknowable"]
-    other_rows = [s for s in answered if s.answer == "other_rows"]
-    should_abstain = unknowable + other_rows
+@dataclass
+class _Groups:
+    scores: list[ItemScore]
+
+    def __post_init__(self):
+        s = self.scores
+        self.ai = [x for x in s if x.source == ExplanationSource.AI.value]
+        self.llm_errors = [x for x in s if x.source == ExplanationSource.FALLBACK_LLM_ERROR.value]
+        self.guarded = [x for x in s if x.source == ExplanationSource.FALLBACK_NUMBER_GUARD.value]
+        # 修法相關只看 AI 有回覆的（數字守門攔下的說明也算有回覆，修法仍保留）
+        self.answered = [x for x in s if x.source != ExplanationSource.FALLBACK_LLM_ERROR.value]
+        self.inferable = [x for x in self.answered if x.answer == "inferable"]
+        self.unknowable = [x for x in self.answered if x.answer == "unknowable"]
+        self.other_rows = [x for x in self.answered if x.answer == "other_rows"]
+        self.should_abstain = self.unknowable + self.other_rows
+        self.restored = sum(x.restored for x in self.inferable)
+        self.held_back = sum(not x.has_fix for x in self.should_abstain)
+        # 處理正確：推得出就修回原值，推不出或要動別列就不給修法
+        self.correct = self.restored + self.held_back
+
+
+def summarize(scores: list[ItemScore], n_cases: int, model: str) -> str:
+    g = _Groups(scores)
+    ai, guarded, answered = g.ai, g.guarded, g.answered
+    inferable, unknowable, other_rows, should_abstain = g.inferable, g.unknowable, g.other_rows, g.should_abstain
+    llm_errors = len(g.llm_errors)
 
     lines = [
         f"# AI 審核評分（{model}）",
         "",
-        f"{len(cases)} 個案例、{len(scores)} 筆錯誤。資料是程式產生的虛構個人壽險承保資料，每個案例弄壞一處。",
+        f"{n_cases} 個案例、{len(scores)} 筆錯誤。資料是程式產生的虛構個人壽險承保資料，每個案例弄壞一處。",
         "",
         "## 總覽",
         "",
         "| 指標 | 結果 |",
         "|---|---|",
+        f"| 處理正確（推得出就修回、推不出就不給修法） | {_rate(g.correct, len(answered))} |",
         f"| AI 說明採用率 | {_rate(len(ai), len(scores))} |",
         f"| 數字守門攔下 | {_rate(len(guarded), len(scores))} |",
         f"| 呼叫失敗（重試後仍失敗） | {_rate(llm_errors, len(scores))} |",
@@ -263,6 +283,98 @@ def summarize(scores: list[ItemScore], cases: list[Case], model: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _ratio(n: int, d: int) -> dict:
+    return {"count": n, "total": d, "rate": round(n / d, 4) if d else None}
+
+
+def summary_json(scores: list[ItemScore], n_cases: int, model: str, runs: list[dict]) -> dict:
+    """機器可讀的評分結果，給後端 API／前端測試結果頁用。欄位說明見 docs/ai-review-api.md。"""
+    g = _Groups(scores)
+    by_rule: dict[str, list[ItemScore]] = defaultdict(list)
+    for s in g.answered:
+        by_rule[s.rule_id].append(s)
+    rules = []
+    for rule_id in sorted(by_rule):
+        r = _Groups(by_rule[rule_id])
+        rules.append({
+            "ruleId": rule_id,
+            "violations": len(r.answered),
+            "handledCorrectly": _ratio(r.correct, len(r.answered)),
+            "restoredWhenInferable": _ratio(r.restored, len(r.inferable)),
+            "heldBackWhenNotInferable": _ratio(r.held_back, len(r.should_abstain)),
+            "citedRule": _ratio(sum(x.cited_rule for x in r.answered), len(r.answered)),
+            "numberGuardBlocked": len(r.guarded),
+        })
+    return {
+        "schemaVersion": 1,
+        "model": model,
+        "generatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "dataset": {
+            "description": "程式產生的虛構個人壽險承保資料，每個案例弄壞一處，被改掉之前的值是標準答案",
+            "product": "個人壽險",
+            "rules": "life_field_rules（11 條）",
+            "cases": n_cases,
+            "violations": len(scores),
+        },
+        "runs": runs,
+        "metrics": {
+            "handledCorrectly": _ratio(g.correct, len(g.answered)),
+            "restoredWhenInferable": _ratio(g.restored, len(g.inferable)),
+            "heldBackWhenNotInferable": _ratio(g.held_back, len(g.should_abstain)),
+            "citedRule": _ratio(sum(x.cited_rule for x in g.answered), len(g.answered)),
+            "aiExplanationUsed": _ratio(len(g.ai), len(scores)),
+            "numberGuardBlocked": _ratio(len(g.guarded), len(scores)),
+            "llmErrors": _ratio(len(g.llm_errors), len(scores)),
+        },
+        "outcomes": {
+            "inferable": {
+                "restored": g.restored,
+                "otherFix": sum(x.other_fix for x in g.inferable),
+                "noFix": sum(x.abstained for x in g.inferable),
+                "allBlocked": sum(x.all_blocked for x in g.inferable),
+            },
+            "unknowable": {
+                "noFix": sum(x.abstained for x in g.unknowable),
+                "guessedFix": sum(x.has_fix for x in g.unknowable),
+                "allBlocked": sum(x.all_blocked for x in g.unknowable),
+            },
+            "otherRows": {
+                "noFix": sum(x.abstained for x in g.other_rows),
+                "guessedFix": sum(x.has_fix for x in g.other_rows),
+                "allBlocked": sum(x.all_blocked for x in g.other_rows),
+            },
+            "rejectedByRevalidation": sum(x.rejected for x in scores),
+        },
+        "byRule": rules,
+    }
+
+
+def write_results(out: Path, scores: list[ItemScore], n_cases: int, model: str, runs: list[dict], note: str) -> str:
+    summary = summarize(scores, n_cases, model) + f"\n{note}\n"
+    (out / "summary.md").write_text(summary, encoding="utf-8")
+    payload = summary_json(scores, n_cases, model, runs)
+    (out / "summary.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return summary
+
+
+def combine(dirs: list[Path], out_root: Path) -> Path:
+    """合併多次評分（例如不同 seed）成一份 summary.md／summary.json。"""
+    scores: list[ItemScore] = []
+    runs: list[dict] = []
+    for d in dirs:
+        run_scores = [ItemScore(**json.loads(line)) for line in (d / "items.jsonl").open(encoding="utf-8")]
+        meta = json.loads((d / "run.json").read_text(encoding="utf-8"))
+        g = _Groups(run_scores)
+        runs.append({**meta, "dir": d.name, "handledCorrectly": _ratio(g.correct, len(g.answered))})
+        scores += run_scores
+    out = out_root / f"combined-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    out.mkdir(parents=True, exist_ok=True)
+    model = "、".join(sorted({r["model"] for r in runs}))
+    seeds = "、".join(str(r["seed"]) for r in runs)
+    write_results(out, scores, sum(r["cases"] for r in runs), model, runs, f"合併 {len(runs)} 次評分（seed {seeds}）。")
+    return out
+
+
 def _case_record(case: Case) -> dict:
     return {
         "case_id": case.case_id,
@@ -287,7 +399,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--notes", default="config/rule_notes.jsonl", help="團隊規則備忘")
     parser.add_argument("--out", default="logs/eval", help="結果資料夾")
     parser.add_argument("--dry-run", action="store_true", help="只產生案例、跑規則，不呼叫 AI")
+    parser.add_argument("--combine", nargs="+", metavar="DIR", help="合併已跑完的評分結果資料夾，不呼叫 AI")
     args = parser.parse_args(argv)
+
+    if args.combine:
+        out = combine([Path(d) for d in args.combine], Path(args.out))
+        print((out / "summary.md").read_text(encoding="utf-8"))
+        print(f"結果：{out}")
+        return 0
 
     rules = life_field_rules()
     cases = make_cases(args.cases, args.seed, args.policies)
@@ -342,9 +461,13 @@ def main(argv: list[str] | None = None) -> int:
     with (out / "items.jsonl").open("w", encoding="utf-8") as f:
         for s in scores:
             f.write(json.dumps(asdict(s), ensure_ascii=False) + "\n")
-    summary = summarize(scores, cases, llm.model_name)
-    summary += f"\n耗時 {time.monotonic() - started:.0f} 秒，seed={args.seed}。\n"
-    (out / "summary.md").write_text(summary, encoding="utf-8")
+    elapsed = round(time.monotonic() - started)
+    meta = {
+        "seed": args.seed, "cases": len(cases), "policies": args.policies,
+        "violations": len(scores), "model": llm.model_name, "elapsedSeconds": elapsed,
+    }
+    (out / "run.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    summary = write_results(out, scores, len(cases), llm.model_name, [meta], f"耗時 {elapsed} 秒，seed={args.seed}。")
 
     print()
     print(summary)
