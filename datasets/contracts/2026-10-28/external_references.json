@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "reference_path_base": "--reference-root",
+  "sources": [
+    {
+      "source_id": "MANUAL-CANCER-2024",
+      "local_file": "official-materials/cancer-manual-2024.pdf",
+      "sha256": "39700faf7f8dacee2834e369241389a363b109eac5fc9cc877c117024170f3a1",
+      "path_base": "reference_root",
+      "bundled": false,
+      "access_status": "request_authorized_copy_privately_from_team_lead"
+    },
+    {
+      "source_id": "MANUAL-ACCIDENT",
+      "local_file": "official-materials/accident-manual.docx",
+      "sha256": "0282656b2eb3b7386ac473cc2cb367a20f31d64f8565f5e9570f5f488c35a27f",
+      "path_base": "reference_root",
+      "bundled": false,
+      "access_status": "request_authorized_copy_privately_from_team_lead"
+    },
+    {
+      "source_id": "MANUAL-ANNUITY",
+      "local_file": "official-materials/annuity-manual.pdf",
+      "sha256": "dc91b86ed57db55e1628112b5fa8787b2bd477309a1201397e5107b6146b9cd7",
+      "path_base": "reference_root",
+      "bundled": false,
+      "access_status": "request_authorized_copy_privately_from_team_lead"
+    },
+    {
+      "source_id": "MANUAL-LIFE-2025",
+      "local_file": "official-materials/life-manual-2025.pdf",
+      "sha256": "3d94805d1892c0b80f743f27cfe54e051219ab935b2a036b6551621bf1dbf7dc",
+      "path_base": "reference_root",
+      "bundled": false,
+      "access_status": "request_authorized_copy_privately_from_team_lead"
+    },
+    {
+      "source_id": "RULES-LIFE-2025",
+      "local_file": "official-materials/life-rules-2025.pdf",
+      "sha256": "3003e7cf521fb6cc0f69f888ba769a7394f490bd274a9a38dc687e3ae13ca660",
+      "path_base": "reference_root",
+      "bundled": false,
+      "access_status": "request_authorized_copy_privately_from_team_lead"
+    }
+  ],
+  "note": "只公開本地手冊檔名、非存取識別碼、SHA-256 與離線引用資訊。手冊未隨 repo 散布；請向組長私下取得授權使用的副本，再以 --reference-root 指定內含 official-materials/ 的目錄。"
+}
