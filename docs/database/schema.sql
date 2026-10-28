@@ -1,4 +1,4 @@
--- Once Wrong 資料表設計（SQLite 3.37+，STRICT tables）
+-- Once Wrong 資料表設計（SQLite 3.44+：STRICT tables、聚合函數內的 ORDER BY）
 -- 對應文件：資料表設計.md
 -- 每個連線都要先執行：
 --   PRAGMA foreign_keys = ON;
@@ -9,12 +9,22 @@
 -- 1. 參照資料：申報檔案種類、規則版本、檢核規則
 ---------------------------------------------------------------------------
 
--- 申報檔案種類：一個險種有多種檔案（例如個人壽險的承保檔、給付檔）
+-- 申報檔案種類：一個險種有多種檔案（例如個人壽險的承保檔、給付檔、填報對象檔）。
+-- 每種檔案的主鍵欄位不同，照填報手冊的「key 值順序」寫在 key_fields（手冊中文欄名）：
+--   承保檔   公司代號、保單編號、保單編號序號、加保日期、異動序號
+--   給付檔   給付類別、公司代號、保單編號、保單編號序號
+--   填報對象 公司代號、填報年度、險別、保險商品編號、公司保單險種代號
+-- group_fields 是「同一張保單」的欄位（手冊：多筆檢核指同一保單號碼＝保單編號＋保單編號序號），
+-- 沒有保單的檔案（填報對象檔）為 NULL。
 CREATE TABLE dataset_type (
     code          TEXT PRIMARY KEY CHECK (code GLOB '[A-Z]*' AND length(code) <= 32),
     product       TEXT NOT NULL CHECK (product IN ('life', 'annuity', 'cancer', 'accident')),
     file_kind     TEXT NOT NULL CHECK (file_kind IN ('underwriting', 'claim', 'subject')),
     name          TEXT NOT NULL,                    -- 例如「個人壽險承保資料」
+    key_fields    TEXT NOT NULL CHECK (json_valid(key_fields) AND json_type(key_fields) = 'array'
+                                       AND json_array_length(key_fields) >= 1),
+    group_fields  TEXT CHECK (group_fields IS NULL OR (json_valid(group_fields) AND json_type(group_fields) = 'array'
+                                       AND json_array_length(group_fields) >= 1)),
     UNIQUE (product, file_kind)
 ) STRICT;
 
@@ -43,6 +53,10 @@ CREATE TABLE rule (
     severity        TEXT NOT NULL DEFAULT 'error' CHECK (severity IN ('error', 'warning')),
     handler         TEXT NOT NULL,                  -- 程式中的實作名稱，例如 EntryContinuesPreviousExit
     params          TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(params) AND json_type(params) = 'object'),
+    -- 判斷「同一個錯」用哪一層定位（見 issue 表的說明）：
+    --   record 用整筆的主鍵；group 用保單（group_fields）。
+    --   規則檢查的欄位本身是主鍵的一部分時（L0302 檢查異動序號、L1402 檢查加保日期）必須用 group。
+    issue_key_level TEXT NOT NULL DEFAULT 'record' CHECK (issue_key_level IN ('record', 'group')),
     manual_page     TEXT NOT NULL,                  -- 手冊頁碼或章節，讓每條規則都查得到出處
     UNIQUE (rule_set_id, code)
 ) STRICT;
@@ -83,34 +97,36 @@ CREATE TABLE version (
 CREATE INDEX idx_version_rule_set ON version (rule_set_id);
 
 -- 資料列：檔案裡的每一行。
--- 業務主鍵（公司代號＋保單編號＋保單編號序號＋異動序號）拆成欄位，因為規則與重複錯誤都靠它定位；
--- 其餘 50 多個欄位放在 fields（JSON），只有被查詢的欄位才拆出來。
+-- fields 存全部欄位，key 用手冊中文欄名（規則程式就是用這些名稱讀資料）。
+-- record_key、group_key 是依檔案種類的 key_fields、group_fields 從 fields 取值組成的 JSON 陣列，
+-- 由觸發器檢查跟 fields 一致；規則與重複錯誤都靠它們定位。
 CREATE TABLE record (
     id              INTEGER PRIMARY KEY,
     version_id      TEXT NOT NULL REFERENCES version (id) ON DELETE RESTRICT,
     line_no         INTEGER NOT NULL CHECK (line_no >= 1),
-    company_code    TEXT NOT NULL,
-    policy_no       TEXT NOT NULL,
-    policy_seq      TEXT NOT NULL,
-    txn_seq         TEXT NOT NULL,
+    record_key      TEXT NOT NULL CHECK (json_valid(record_key) AND json_type(record_key) = 'array'),
+    group_key       TEXT CHECK (group_key IS NULL OR (json_valid(group_key) AND json_type(group_key) = 'array')),
     raw_line        TEXT NOT NULL,                  -- 原始定長文字，方便追查與重現
     fields          TEXT NOT NULL CHECK (json_valid(fields) AND json_type(fields) = 'object'),
     UNIQUE (version_id, line_no)
 ) STRICT;
 -- 不設 UNIQUE：錯誤資料可能出現重複主鍵，那正是規則要抓的錯
-CREATE INDEX idx_record_policy ON record (version_id, company_code, policy_no, policy_seq, txn_seq);
+CREATE INDEX idx_record_key ON record (version_id, record_key);
+CREATE INDEX idx_record_group ON record (version_id, group_key);
 
 ---------------------------------------------------------------------------
 -- 3. 檢核結果
 ---------------------------------------------------------------------------
 
 -- 一個檢核結果 = 一條規則在某版本抓到的一個錯。
--- issue_key 由「規則代碼＋每個出錯格子的（業務主鍵, 欄位）」排序後雜湊而成，
+-- issue_key = sha256(JSON [規則代碼, 層級, 排序去重後的 [定位鍵, 欄位] 清單])，由程式計算：
+--   record 層級的定位鍵是 record_key，group 層級是 group_key（見 rule.issue_key_level）。
 -- 不用列號，所以資料列順序改變時仍能比對出同一個錯。
 -- repeat_status 在寫入時決定、之後不變（歷史不可修改，所以不會過期）：
 --   new       之前所有版本都沒出現過
 --   repeated  上一版也有
 --   regressed 曾經出現、上一版已修好、這一版又出現
+-- prev_seen_number 是這個錯上一次出現的版號；regressed 時「修好的版本」就是 prev_seen_number + 1。
 CREATE TABLE issue (
     id                    TEXT PRIMARY KEY,
     version_id            TEXT NOT NULL,
@@ -121,26 +137,36 @@ CREATE TABLE issue (
     message               TEXT NOT NULL,          -- 規則產生的固定說明（AI 失敗時顯示這段）
     facts                 TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(facts) AND json_type(facts) = 'object'),
     repeat_status         TEXT NOT NULL CHECK (repeat_status IN ('new', 'repeated', 'regressed')),
+    prev_seen_number      INTEGER CHECK (prev_seen_number BETWEEN 1 AND version_number - 1),
     first_seen_number     INTEGER NOT NULL CHECK (first_seen_number BETWEEN 1 AND version_number),
     created_at            TEXT NOT NULL CHECK (created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z'),
     FOREIGN KEY (version_id, report_id) REFERENCES version (id, report_id) ON DELETE RESTRICT,
     UNIQUE (version_id, issue_key),
+    CHECK ((repeat_status = 'new') = (prev_seen_number IS NULL)),
+    CHECK ((repeat_status = 'repeated') = (prev_seen_number IS NOT NULL AND prev_seen_number = version_number - 1)),
     CHECK ((repeat_status = 'new') = (first_seen_number = version_number))
 ) STRICT;
 CREATE INDEX idx_issue_version_rule ON issue (version_id, rule_id);
 CREATE INDEX idx_issue_history ON issue (report_id, issue_key, version_number);
 CREATE INDEX idx_issue_rule ON issue (rule_id);
 
--- 一個錯可能牽涉好幾筆資料、好幾個欄位（例如 L1305 要比對同一保單的前後兩筆）
--- role = error：出錯的格子，修法只能改這些；role = context：只給 AI 參考，不能改
+-- 出錯的格子：一個錯可能牽涉好幾筆資料、好幾個欄位。修法只能改這些格子。
 CREATE TABLE issue_cell (
     issue_id        TEXT NOT NULL REFERENCES issue (id) ON DELETE RESTRICT,
     record_id       INTEGER NOT NULL REFERENCES record (id) ON DELETE RESTRICT,
     field_name      TEXT NOT NULL,
-    role            TEXT NOT NULL CHECK (role IN ('error', 'context')),
     PRIMARY KEY (issue_id, record_id, field_name)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX idx_issue_cell_record ON issue_cell (record_id);
+
+-- 參考資料列：整筆給 AI 參考、不能改（例如 L1305 要看同一保單的前一筆）。
+-- 對應 AI 端 Violation.context_rows。
+CREATE TABLE issue_context (
+    issue_id        TEXT NOT NULL REFERENCES issue (id) ON DELETE RESTRICT,
+    record_id       INTEGER NOT NULL REFERENCES record (id) ON DELETE RESTRICT,
+    PRIMARY KEY (issue_id, record_id)
+) STRICT, WITHOUT ROWID;
+CREATE INDEX idx_issue_context_record ON issue_context (record_id);
 
 ---------------------------------------------------------------------------
 -- 4. AI 說明與修法建議
@@ -184,10 +210,14 @@ CREATE TABLE suggestion_change (
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX idx_suggestion_change_record ON suggestion_change (record_id);
 
--- AI 說明引用的手冊段落（段落本身存在知識庫 JSONL，以手冊雜湊值綁定版本）
+-- AI 說明引用的手冊段落（段落本身存在知識庫 JSONL，以手冊雜湊值綁定版本）。
+-- 知識庫重建後段落編號可能改變，所以同時存一份出處快照，前端 Citation 也直接用這幾欄。
 CREATE TABLE citation (
     ai_review_id    TEXT NOT NULL REFERENCES ai_review (id) ON DELETE RESTRICT,
-    passage_id      TEXT NOT NULL,                  -- 知識庫段落編號，例如 K3
+    passage_id      TEXT NOT NULL,                  -- 知識庫 Passage.id，例如 LIFE-RULE-0068（不是 prompt 裡的 K1、K2）
+    source_title    TEXT NOT NULL,                  -- 手冊名稱
+    section         TEXT NOT NULL,
+    page            TEXT NOT NULL,                  -- 手冊頁碼，例如 伍-17
     PRIMARY KEY (ai_review_id, passage_id)
 ) STRICT, WITHOUT ROWID;
 
@@ -269,31 +299,55 @@ WHEN NEW.version_number <> (SELECT number FROM version WHERE id = NEW.version_id
      <> (SELECT rule_set_id FROM version WHERE id = NEW.version_id)
 BEGIN SELECT RAISE(ABORT, 'issue does not match its version or rule set'); END;
 
--- 重複錯誤的判定必須跟歷史一致：
---   repeated  ⇔ 上一版有同一個 issue_key
---   regressed ⇔ 上一版沒有、但更早的版本有
---   new       ⇔ 更早的版本都沒有
--- first_seen_number 必須是這個 issue_key 最早出現的版號
+-- 重複錯誤的判定必須跟歷史一致。repeat_status 由 issue 表的 CHECK 從 prev_seen_number 推出：
+--   new ⇔ 沒有更早的版本；repeated ⇔ 上一版有；regressed ⇔ 上一版沒有、更早的版本有
+-- 這裡檢查 prev_seen_number、first_seen_number 是這個 issue_key 在更早版本裡最晚、最早出現的版號
 CREATE TRIGGER trg_issue_repeat_status BEFORE INSERT ON issue
-WHEN NEW.repeat_status <> CASE
-        WHEN EXISTS (SELECT 1 FROM issue p WHERE p.report_id = NEW.report_id
-                     AND p.issue_key = NEW.issue_key AND p.version_number = NEW.version_number - 1)
-            THEN 'repeated'
-        WHEN EXISTS (SELECT 1 FROM issue p WHERE p.report_id = NEW.report_id
-                     AND p.issue_key = NEW.issue_key AND p.version_number < NEW.version_number - 1)
-            THEN 'regressed'
-        ELSE 'new' END
+WHEN NEW.prev_seen_number IS NOT
+        (SELECT max(p.version_number) FROM issue p WHERE p.report_id = NEW.report_id
+         AND p.issue_key = NEW.issue_key AND p.version_number < NEW.version_number)
   OR NEW.first_seen_number <> COALESCE(
         (SELECT min(p.version_number) FROM issue p WHERE p.report_id = NEW.report_id
          AND p.issue_key = NEW.issue_key AND p.version_number < NEW.version_number),
         NEW.version_number)
 BEGIN SELECT RAISE(ABORT, 'repeat_status or first_seen_number does not match history'); END;
 
--- 檢核結果牽涉的資料列必須屬於同一個版本
+-- record_key、group_key 必須跟 fields 一致，主鍵欄位不能缺
+CREATE TRIGGER trg_record_keys BEFORE INSERT ON record
+BEGIN
+    SELECT RAISE(ABORT, 'record is missing a key field')
+    WHERE EXISTS (
+        SELECT 1 FROM version v JOIN report r ON r.id = v.report_id
+        JOIN dataset_type d ON d.code = r.dataset_type, json_each(d.key_fields) k
+        WHERE v.id = NEW.version_id
+          AND json_type(NEW.fields, '$."' || k.value || '"') IS NOT 'text');
+    SELECT RAISE(ABORT, 'record_key or group_key does not match fields')
+    FROM version v JOIN report r ON r.id = v.report_id JOIN dataset_type d ON d.code = r.dataset_type
+    WHERE v.id = NEW.version_id
+      AND (json(NEW.record_key) IS NOT
+             (SELECT json_group_array(json_extract(NEW.fields, '$."' || k.value || '"') ORDER BY k.key)
+              FROM json_each(d.key_fields) k)
+        OR json(NEW.group_key) IS NOT
+             (SELECT CASE WHEN d.group_fields IS NULL THEN NULL ELSE
+                (SELECT json_group_array(json_extract(NEW.fields, '$."' || g.value || '"') ORDER BY g.key)
+                 FROM json_each(d.group_fields) g) END));
+END;
+
+-- 用保單層級判斷的規則，只能用在有保單的檔案種類
+CREATE TRIGGER trg_rule_group_level BEFORE INSERT ON rule
+WHEN NEW.issue_key_level = 'group'
+ AND (SELECT group_fields FROM dataset_type WHERE code = NEW.dataset_type) IS NULL
+BEGIN SELECT RAISE(ABORT, 'group-level rule needs a dataset type with group_fields'); END;
+
+-- 出錯格子、參考資料列都必須屬於同一個版本
 CREATE TRIGGER trg_issue_cell_same_version BEFORE INSERT ON issue_cell
 WHEN (SELECT version_id FROM record WHERE id = NEW.record_id)
      <> (SELECT version_id FROM issue WHERE id = NEW.issue_id)
 BEGIN SELECT RAISE(ABORT, 'issue_cell record belongs to another version'); END;
+CREATE TRIGGER trg_issue_context_same_version BEFORE INSERT ON issue_context
+WHEN (SELECT version_id FROM record WHERE id = NEW.record_id)
+     <> (SELECT version_id FROM issue WHERE id = NEW.issue_id)
+BEGIN SELECT RAISE(ABORT, 'issue_context record belongs to another version'); END;
 
 -- 確認：必須是最新版本、沒有 error 等級的錯、雜湊值與規則版本要跟版本一致
 CREATE TRIGGER trg_confirmation_rules BEFORE INSERT ON confirmation
