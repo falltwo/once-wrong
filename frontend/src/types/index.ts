@@ -45,8 +45,27 @@ export interface Report {
   canSubmit?: boolean;
 }
 export interface Suggestion {
+  title: string;
   explanation: string;
-  value?: number;
+  suggestion?: {
+    reason: string;
+    verification: "passed";
+    changes: Array<{
+      rowId: string;
+      row: number;
+      column: string;
+      value: string | number | null;
+    }>;
+  } | null;
+  rejectedSuggestions: string[];
+  citations: Array<{
+    id: string;
+    source: string;
+    section: string[];
+    page?: number | null;
+  }>;
+  blockedNumbers: string[];
+  model: string;
   verification: "passed" | "unavailable";
-  source: "demo";
+  source: "ai" | "fallback_llm_error" | "fallback_number_guard";
 }

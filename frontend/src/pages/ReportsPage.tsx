@@ -1,10 +1,13 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, FileSpreadsheet } from "lucide-react";
+import { ArrowRight, FilePlus2, FileSpreadsheet } from "lucide-react";
 import { reportsApi } from "../api/reports";
 import { Loading, ErrorState } from "../components/QueryStates";
+import { CreateReportDialog } from "../features/upload/CreateReportDialog";
 
 export function ReportsPage() {
+  const [createOpen, setCreateOpen] = useState(false);
   const query = useQuery({ queryKey: ["reports"], queryFn: reportsApi.list });
   return (
     <main>
@@ -14,6 +17,9 @@ export function ReportsPage() {
           <h1>報表工作空間</h1>
           <p>檢視資料品質，追蹤每一次修正。</p>
         </div>
+        <button className="primary" onClick={() => setCreateOpen(true)}>
+          <FilePlus2 size={17} /> 新增報表
+        </button>
       </div>
       {query.isPending ? (
         <Loading />
@@ -54,11 +60,12 @@ export function ReportsPage() {
               </Link>
             );
           })}
-          <p className="muted intro-note">
-            目前提供一份示範月報。進入工作區後，可上傳 CSV 建立新的報表版本。
-          </p>
+          {!query.data.length && (
+            <p className="muted intro-note">目前沒有報表，新增報表並上傳 CSV 建立第一版。</p>
+          )}
         </>
       )}
+      {createOpen && <CreateReportDialog onClose={() => setCreateOpen(false)} />}
     </main>
   );
 }

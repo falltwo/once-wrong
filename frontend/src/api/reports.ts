@@ -96,6 +96,13 @@ export const reportsApi = {
       },
     );
   },
+  create(name: string, period: string, file: File): Promise<Report> {
+    const form = new FormData();
+    form.append("name", name);
+    form.append("period", period);
+    form.append("file", file);
+    return request<Report>("/reports", { method: "POST", body: form });
+  },
   suggestion(issue: Issue, versionId: string): Promise<Suggestion> {
     return request<Suggestion>(
       `/versions/${encodeURIComponent(versionId)}/issues/${encodeURIComponent(issue.id)}/suggestion`,

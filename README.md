@@ -8,23 +8,14 @@ Cardif InsurHack 2026 題目 6-2「資料品質與檢核助手」的參賽專案
 - 讓 AI 用白話解釋錯誤、提出修正建議；建議要先通過規則重驗，資料仍由人修改。
 - 提醒重複未通過的規則，留下每次檢核紀錄，最後由人確認送出。
 
-目前已有可操作的前端原型，使用本機模擬資料與兩條示範規則；正式後端與 AI 尚未串接，尚無三組對照實測成績。之後會用同一批模擬報表，比較純規則、純 AI 和規則加 AI 的處理結果。
+目前已有 React 前端與 FastAPI/SQLite 示範 API。報表頁面可建立報表並上傳第一版 CSV，也可上傳修正版；後端執行 R-01/R-07 示範檢核並保存版本。錯誤詳情可選擇呼叫 AI 審查流程，候選修法須經示範規則重驗。這些是原型功能，尚無完整官方規則或實測成績；API 契約見 [docs/backend-api.md](docs/backend-api.md)。
 
 ## 資料夾
 
-- `frontend/`：React + TypeScript + Vite 前端原型。
 - `docs/`：規則、設計與實驗紀錄。
-- `src/`：原型程式。
+- `src/`：AI 審查與知識庫的原型及命令列入口。
+- `backend/`：FastAPI 示範 API、持久化及 AI 審查串接。
+- `frontend/`：React + TypeScript 示範介面。
 - `tests/`：規則與流程測試。
 
-`src/`、`tests/` 目前保留佔位檔，供後續後端與測試開發使用。請勿提交真實保戶資料或金鑰。
-
-## 啟動前端
-
-```sh
-cd frontend
-npm ci
-npm run dev
-```
-
-`npm run build` 執行型別檢查與正式打包。完整功能、限制與 API 交接說明見 [前端 README](frontend/README.md)。
+請勿提交真實保戶資料或金鑰。
