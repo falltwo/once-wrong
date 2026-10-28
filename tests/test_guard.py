@@ -1,4 +1,4 @@
-from once_wrong.ai_review.guard import allowed_numbers, extract_numbers, find_unsupported_numbers
+from once_wrong_ai.ai_review.guard import allowed_numbers, extract_numbers, find_unsupported_numbers
 
 
 def _r07_row3(report, rules):
@@ -40,8 +40,8 @@ def test_numbers_from_reference_rows_are_allowed(life_report, life_rules):
 
 
 def test_date_parts_can_be_cited():
-    from once_wrong.report import Report
-    from once_wrong.rules.life import ValidDate
+    from once_wrong_ai.report import Report
+    from once_wrong_ai.rules.life import ValidDate
 
     columns = ["保單編號", "加保日期", "退保日期"]
     report = Report("t", 1, columns, [dict(zip(columns, ("P", "20250101", "20250229")))])

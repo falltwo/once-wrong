@@ -1,6 +1,6 @@
-from once_wrong.ai_review.models import AIChange, AIFixCandidate
-from once_wrong.ai_review.validation import validate_candidate
-from once_wrong.report import CellRef
+from once_wrong_ai.ai_review.models import AIChange, AIFixCandidate
+from once_wrong_ai.ai_review.validation import validate_candidate
+from once_wrong_ai.report import CellRef
 
 
 def _check(report, rules, rule_id, row, *changes):

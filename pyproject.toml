@@ -19,10 +19,11 @@ dependencies = [
 dev = ["pytest>=8"]
 
 [project.scripts]
-once-wrong-review = "once_wrong.ai_review.cli:main"
+once-wrong-review = "once_wrong_ai.ai_review.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["once_wrong_ai", "once_wrong_ai.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from once_wrong.ai_review.llm import LLMError
-from once_wrong.ai_review.models import AIExplanation
-from once_wrong.report import Report
-from once_wrong.rules.examples import example_rules, life_example_rules
+from once_wrong_ai.ai_review.llm import LLMError
+from once_wrong_ai.ai_review.models import AIExplanation
+from once_wrong_ai.report import Report
+from once_wrong_ai.rules.examples import example_rules, life_example_rules
 
 EXAMPLE_CSV = Path(__file__).parents[1] / "examples" / "mock_reserve_2026-09.csv"
 LIFE_CSV = EXAMPLE_CSV.parent / "mock_life_policies_2025.csv"

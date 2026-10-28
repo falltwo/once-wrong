@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import json
 
-from once_wrong.kb.memory import RuleNote
-from once_wrong.kb.models import Passage
-from once_wrong.report import Report, format_cell
-from once_wrong.rules import Rule, Violation
+from once_wrong_ai.kb.memory import RuleNote
+from once_wrong_ai.kb.models import Passage
+from once_wrong_ai.report import Report, format_cell
+from once_wrong_ai.rules import Rule, Violation
 
 SYSTEM_PROMPT = """\
 你是保險公司的報表檢核助手，負責向填表的同事說明檢核錯誤，並提出修法建議。

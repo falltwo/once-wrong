@@ -6,8 +6,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from once_wrong.kb.ingest import ingest
-from once_wrong.kb.models import Passage
+from once_wrong_ai.kb.ingest import ingest
+from once_wrong_ai.kb.models import Passage
 
 PASSAGES_FILE = "passages.jsonl"
 

@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
 
-from once_wrong.report import CellRef
+from once_wrong_ai.report import CellRef
 
 
 class AuditLog(Protocol):

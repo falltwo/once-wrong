@@ -17,9 +17,9 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from once_wrong.ai_review.models import ExplanationSource, ReviewItem
-from once_wrong.report import Cell
-from once_wrong.rules import Violation
+from once_wrong_ai.ai_review.models import ExplanationSource, ReviewItem
+from once_wrong_ai.report import Cell
+from once_wrong_ai.rules import Violation
 
 RowId = Callable[[int], str]
 JsonValue = str | int | None

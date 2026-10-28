@@ -3,15 +3,15 @@ from decimal import Decimal
 
 from conftest import FakeLLM
 
-from once_wrong.ai_review import AIReviewer, LLMError
-from once_wrong.ai_review.api import (
+from once_wrong_ai.ai_review import AIReviewer, LLMError
+from once_wrong_ai.ai_review.api import (
     SuggestionResponse,
     issue_payloads,
     json_value,
     suggestion_payload,
 )
-from once_wrong.ai_review.models import AIChange, AIExplanation, AIFixCandidate
-from once_wrong.kb.models import Passage, PassageKind
+from once_wrong_ai.ai_review.models import AIChange, AIExplanation, AIFixCandidate
+from once_wrong_ai.kb.models import Passage, PassageKind
 
 # frontend/src/types/index.ts（codex/frontend-prototype）的 Suggestion 欄位
 FRONTEND_SUGGESTION_FIELDS = {
@@ -110,7 +110,7 @@ def test_response_model_is_valid_json_schema():
 
 
 def test_find_violation_by_issue_id(life_report, life_rules):
-    from once_wrong.ai_review.api import find_violation
+    from once_wrong_ai.ai_review.api import find_violation
 
     violations = life_rules.check(life_report)
     assert find_violation(violations, "6:L0303").rule_id == "L0303"
@@ -119,10 +119,10 @@ def test_find_violation_by_issue_id(life_report, life_rules):
 
 def test_demo_rules_on_backend_columns_give_backend_issue_ids():
     """後端 demo_csv_v1 的欄位（id, product, previous, opening）可以直接用示範規則，issueId 跟後端一致。"""
-    from once_wrong.ai_review.api import issue_ids
-    from once_wrong.report import Report
-    from once_wrong.rules import RuleSet
-    from once_wrong.rules.examples import OpeningEqualsClosing, RequiredField
+    from once_wrong_ai.ai_review.api import issue_ids
+    from once_wrong_ai.report import Report
+    from once_wrong_ai.rules import RuleSet
+    from once_wrong_ai.rules.examples import OpeningEqualsClosing, RequiredField
 
     columns = ["id", "product", "previous", "opening"]
     rows = [

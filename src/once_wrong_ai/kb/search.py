@@ -17,8 +17,8 @@ import re
 from collections import Counter
 from collections.abc import Iterable
 
-from once_wrong.kb.ingest import field_key
-from once_wrong.kb.models import Passage, PassageKind
+from once_wrong_ai.kb.ingest import field_key
+from once_wrong_ai.kb.models import Passage, PassageKind
 
 _CJK = r"㐀-鿿"
 _CJK_GAP = re.compile(rf"(?<=[{_CJK}])[ \t　]+(?=[{_CJK}])")
@@ -74,7 +74,7 @@ class Retriever:
 
     @classmethod
     def from_dir(cls, kb_dir: str) -> Retriever:
-        from once_wrong.kb.store import load
+        from once_wrong_ai.kb.store import load
 
         return cls(load(kb_dir))
 

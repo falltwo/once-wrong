@@ -1,13 +1,13 @@
 """AI 審核評分：產生案例 → 跑真的 Gemini → 跟標準答案比對 → 算出各項比率。
 
     # 先看會產生哪些案例，不呼叫 AI
-    python -m once_wrong.evaluation.run --cases 39 --dry-run
+    python -m once_wrong_ai.evaluation.run --cases 39 --dry-run
 
     # 實際評分（每筆錯誤一次 Gemini 呼叫）
-    python -m once_wrong.evaluation.run --cases 39 --workers 4
+    python -m once_wrong_ai.evaluation.run --cases 39 --workers 4
 
     # 合併多次結果（例如不同 seed），不呼叫 AI
-    python -m once_wrong.evaluation.run --combine logs/eval/A logs/eval/B logs/eval/C
+    python -m once_wrong_ai.evaluation.run --combine logs/eval/A logs/eval/B logs/eval/C
 
 結果寫在 logs/eval/<時間>/：summary.md（摘要）、summary.json（給 API／前端用）、run.json（這次的設定）、
 items.jsonl（每筆錯誤的評分）、cases.jsonl（案例與標準答案）、audit.jsonl（AI 原始回覆）。
@@ -36,17 +36,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from once_wrong.ai_review.audit import JsonlAuditLog, _default
-from once_wrong.ai_review.llm import LLMClient, LLMError, llm_from_env
-from once_wrong.ai_review.models import AIExplanation, ExplanationSource, ReviewItem
-from once_wrong.ai_review.reviewer import AIReviewer, related_violations
-from once_wrong.evaluation.cases import Case, make_cases
-from once_wrong.kb.memory import RuleMemory
-from once_wrong.kb.search import Retriever
-from once_wrong.kb.store import PASSAGES_FILE
-from once_wrong.report import CellRef
-from once_wrong.rules import Violation
-from once_wrong.rules.life import life_field_rules
+from once_wrong_ai.ai_review.audit import JsonlAuditLog, _default
+from once_wrong_ai.ai_review.llm import LLMClient, LLMError, llm_from_env
+from once_wrong_ai.ai_review.models import AIExplanation, ExplanationSource, ReviewItem
+from once_wrong_ai.ai_review.reviewer import AIReviewer, related_violations
+from once_wrong_ai.evaluation.cases import Case, make_cases
+from once_wrong_ai.kb.memory import RuleMemory
+from once_wrong_ai.kb.search import Retriever
+from once_wrong_ai.kb.store import PASSAGES_FILE
+from once_wrong_ai.report import CellRef
+from once_wrong_ai.rules import Violation
+from once_wrong_ai.rules.life import life_field_rules
 
 _RETRYABLE = ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "500", "INTERNAL")
 

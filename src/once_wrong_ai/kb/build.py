@@ -1,6 +1,6 @@
 """建立知識庫：
 
-    python -m once_wrong.kb.build config/manuals.json --out data/kb
+    python -m once_wrong_ai.kb.build config/manuals.json --out data/kb
 
 手冊更新時重跑一次即可；審核時只讀 data/kb，不再解析 PDF。
 """
@@ -13,7 +13,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from once_wrong.kb.store import build, load_manifest, save
+from once_wrong_ai.kb.store import build, load_manifest, save
 
 
 def main(argv: list[str] | None = None) -> int:

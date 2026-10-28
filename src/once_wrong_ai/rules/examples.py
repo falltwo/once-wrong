@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from once_wrong.report import CellRef, Report
-from once_wrong.rules import RuleSet, Violation
-from once_wrong.rules.life import FirstTransactionNotTerminated, TransactionSequence
+from once_wrong_ai.report import CellRef, Report
+from once_wrong_ai.rules import RuleSet, Violation
+from once_wrong_ai.rules.life import FirstTransactionNotTerminated, TransactionSequence
 
 
 @dataclass

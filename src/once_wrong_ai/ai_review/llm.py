@@ -16,7 +16,7 @@ import os
 from dataclasses import dataclass
 from typing import Protocol
 
-from once_wrong.ai_review.models import AIExplanation
+from once_wrong_ai.ai_review.models import AIExplanation
 
 DEFAULT_MODEL = "gemini-3.5-flash"
 
@@ -100,7 +100,7 @@ def llm_from_env() -> LLMClient:
     if not provider:
         provider = "openrouter" if os.environ.get("OPENROUTER_API_KEY") else "gemini"
     if provider == "openrouter":
-        from once_wrong.ai_review.openrouter import OpenRouterClient, OpenRouterConfig
+        from once_wrong_ai.ai_review.openrouter import OpenRouterClient, OpenRouterConfig
 
         return OpenRouterClient(OpenRouterConfig.from_env())
     if provider == "gemini":

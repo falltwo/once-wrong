@@ -15,7 +15,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from once_wrong.kb.models import Passage, PassageKind
+from once_wrong_ai.kb.models import Passage, PassageKind
 
 MAX_CHARS = 1500
 

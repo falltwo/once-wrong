@@ -11,9 +11,9 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from once_wrong.kb.models import Passage
-from once_wrong.report import Cell, CellRef
-from once_wrong.rules import Violation
+from once_wrong_ai.kb.models import Passage
+from once_wrong_ai.report import Cell, CellRef
+from once_wrong_ai.rules import Violation
 
 
 # ---- Gemini 回傳的結構（欄位盡量單純，Gemini 的 response_schema 不支援 dict / union）----

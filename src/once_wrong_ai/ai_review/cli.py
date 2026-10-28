@@ -1,10 +1,10 @@
 """示範指令：讀一份 CSV 報表，跑示範規則，再請 LLM（Gemini 或 OpenRouter）說明每個錯誤。
 
     # 準備金月報（簡報第 8 頁的示意）
-    python -m once_wrong.ai_review.cli examples/mock_reserve_2026-09.csv --period 2026-09
+    python -m once_wrong_ai.ai_review.cli examples/mock_reserve_2026-09.csv --period 2026-09
 
     # 個人壽險承保資料，用真實規則 L0302 / L0303，並從填報手冊知識庫找依據
-    python -m once_wrong.ai_review.cli examples/mock_life_policies_2025.csv --rules life --product 個人壽險
+    python -m once_wrong_ai.ai_review.cli examples/mock_life_policies_2025.csv --rules life --product 個人壽險
 """
 
 from __future__ import annotations
@@ -13,15 +13,15 @@ import argparse
 import sys
 from pathlib import Path
 
-from once_wrong.ai_review.audit import JsonlAuditLog
-from once_wrong.ai_review.llm import LLMError, llm_from_env
-from once_wrong.ai_review.models import ExplanationSource
-from once_wrong.ai_review.reviewer import PRODUCT_META_KEY, AIReviewer
-from once_wrong.kb.memory import RuleMemory
-from once_wrong.kb.search import Retriever
-from once_wrong.kb.store import PASSAGES_FILE
-from once_wrong.report import Report, format_cell
-from once_wrong.rules.examples import example_rules, life_example_rules
+from once_wrong_ai.ai_review.audit import JsonlAuditLog
+from once_wrong_ai.ai_review.llm import LLMError, llm_from_env
+from once_wrong_ai.ai_review.models import ExplanationSource
+from once_wrong_ai.ai_review.reviewer import PRODUCT_META_KEY, AIReviewer
+from once_wrong_ai.kb.memory import RuleMemory
+from once_wrong_ai.kb.search import Retriever
+from once_wrong_ai.kb.store import PASSAGES_FILE
+from once_wrong_ai.report import Report, format_cell
+from once_wrong_ai.rules.examples import example_rules, life_example_rules
 
 RULE_SETS = {"demo": example_rules, "life": life_example_rules}
 

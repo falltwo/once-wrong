@@ -4,9 +4,9 @@ import pytest
 
 from conftest import LIFE_CSV
 
-from once_wrong.report import CellRef, Report
-from once_wrong.rules.examples import life_example_rules
-from once_wrong.rules.life import life_field_rules
+from once_wrong_ai.report import CellRef, Report
+from once_wrong_ai.rules.examples import life_example_rules
+from once_wrong_ai.rules.life import life_field_rules
 
 
 def test_codes_with_leading_zeros_stay_text():

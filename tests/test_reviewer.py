@@ -1,8 +1,8 @@
 from conftest import FakeLLM
 
-from once_wrong.ai_review import AIReviewer, ExplanationSource, LLMError, MemoryAuditLog
-from once_wrong.ai_review.models import AIChange, AIExplanation, AIFixCandidate
-from once_wrong.report import CellRef
+from once_wrong_ai.ai_review import AIReviewer, ExplanationSource, LLMError, MemoryAuditLog
+from once_wrong_ai.ai_review.models import AIChange, AIExplanation, AIFixCandidate
+from once_wrong_ai.report import CellRef
 
 
 def _explain(text, *candidates):
@@ -73,8 +73,8 @@ def test_only_error_rows_are_sent_to_ai(report, rules):
 
 
 def test_manual_passages_are_sent_and_cited(report, rules):
-    from once_wrong.kb.models import Passage, PassageKind
-    from once_wrong.kb.search import Retriever
+    from once_wrong_ai.kb.models import Passage, PassageKind
+    from once_wrong_ai.kb.search import Retriever
 
     knowledge = Retriever([
         Passage(id="M1", product="準備金", manual="準備金手冊", section=["檢核規則"], kind=PassageKind.RULE,
@@ -95,8 +95,8 @@ def test_manual_passages_are_sent_and_cited(report, rules):
 
 
 def test_uncited_passage_numbers_are_not_allowed(report, rules):
-    from once_wrong.kb.models import Passage, PassageKind
-    from once_wrong.kb.search import Retriever
+    from once_wrong_ai.kb.models import Passage, PassageKind
+    from once_wrong_ai.kb.search import Retriever
 
     knowledge = Retriever([
         Passage(id="M1", product="準備金", manual="手冊", section=["檢核"], kind=PassageKind.RULE,
@@ -110,7 +110,7 @@ def test_uncited_passage_numbers_are_not_allowed(report, rules):
 
 
 def test_team_notes_are_sent(report, rules, tmp_path):
-    from once_wrong.kb.memory import RuleMemory
+    from once_wrong_ai.kb.memory import RuleMemory
 
     memory = RuleMemory(tmp_path / "notes.jsonl")
     memory.add("R-07", "月中調整一律記在本月期初之後，不可改上月期末。")
@@ -142,8 +142,8 @@ def test_reference_rows_are_sent_separately(life_report, life_rules):
 
 
 def test_other_errors_on_same_row_are_sent():
-    from once_wrong.report import Report
-    from once_wrong.rules.life import life_field_rules
+    from once_wrong_ai.report import Report
+    from once_wrong_ai.rules.life import life_field_rules
 
     columns = ["公司代號", "保單編號", "保單編號序號", "異動序號", "加保別", "加保日期", "退保別", "退保日期"]
     report = Report("t", 1, columns, [dict(zip(columns, ("01", "P", "00001", "00000", "XED", "20250112", "XED", "00000000")))])

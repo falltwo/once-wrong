@@ -22,8 +22,8 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from once_wrong.ai_review.llm import LLMError
-from once_wrong.ai_review.models import AIExplanation
+from once_wrong_ai.ai_review.llm import LLMError
+from once_wrong_ai.ai_review.models import AIExplanation
 
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "deepseek/deepseek-v4-flash"

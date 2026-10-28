@@ -12,22 +12,22 @@ AI 失敗時流程不中斷，退回規則的固定說明。
 
 from __future__ import annotations
 
-from once_wrong.ai_review.audit import AuditLog, MemoryAuditLog
-from once_wrong.ai_review.guard import allowed_numbers, find_unsupported_numbers
-from once_wrong.ai_review.llm import LLMClient, LLMError
-from once_wrong.ai_review.models import (
+from once_wrong_ai.ai_review.audit import AuditLog, MemoryAuditLog
+from once_wrong_ai.ai_review.guard import allowed_numbers, find_unsupported_numbers
+from once_wrong_ai.ai_review.llm import LLMClient, LLMError
+from once_wrong_ai.ai_review.models import (
     ExplanationSource,
     FixSuggestion,
     RejectedSuggestion,
     ReviewItem,
 )
-from once_wrong.ai_review.prompts import SYSTEM_PROMPT, build_user_prompt, passage_label
-from once_wrong.ai_review.validation import validate_candidate
-from once_wrong.kb.memory import RuleMemory
-from once_wrong.kb.models import Passage
-from once_wrong.kb.search import Retriever
-from once_wrong.report import Report
-from once_wrong.rules import RuleSet, Violation
+from once_wrong_ai.ai_review.prompts import SYSTEM_PROMPT, build_user_prompt, passage_label
+from once_wrong_ai.ai_review.validation import validate_candidate
+from once_wrong_ai.kb.memory import RuleMemory
+from once_wrong_ai.kb.models import Passage
+from once_wrong_ai.kb.search import Retriever
+from once_wrong_ai.report import Report
+from once_wrong_ai.rules import RuleSet, Violation
 
 PRODUCT_META_KEY = "險別"
 

@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Protocol, runtime_checkable
 
-from once_wrong.report import CellRef, Report
+from once_wrong_ai.report import CellRef, Report
 
 FactValue = int | Decimal | str | None
 

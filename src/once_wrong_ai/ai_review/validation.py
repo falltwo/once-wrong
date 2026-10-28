@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from once_wrong.ai_review.models import AIFixCandidate, FixSuggestion
-from once_wrong.report import Cell, CellRef, Report
-from once_wrong.rules import RuleSet, Violation
+from once_wrong_ai.ai_review.models import AIFixCandidate, FixSuggestion
+from once_wrong_ai.report import Cell, CellRef, Report
+from once_wrong_ai.rules import RuleSet, Violation
 
 
 @dataclass

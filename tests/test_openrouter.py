@@ -5,8 +5,8 @@ import json
 import httpx
 import pytest
 
-from once_wrong.ai_review.llm import LLMError, llm_from_env
-from once_wrong.ai_review.openrouter import OpenRouterClient, OpenRouterConfig
+from once_wrong_ai.ai_review.llm import LLMError, llm_from_env
+from once_wrong_ai.ai_review.openrouter import OpenRouterClient, OpenRouterConfig
 
 REPLY = {
     "title": "異動序號要依序編",
@@ -106,7 +106,7 @@ def test_reply_not_matching_schema_is_an_error():
 def test_provider_is_chosen_from_env(monkeypatch):
     for name in ("ONCE_WRONG_PROVIDER", "OPENROUTER_API_KEY", "OPENROUTER_MODEL", "OPENROUTER_REASONING"):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr("once_wrong.ai_review.llm._load_dotenv", lambda: None)
+    monkeypatch.setattr("once_wrong_ai.ai_review.llm._load_dotenv", lambda: None)
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
     monkeypatch.setenv("OPENROUTER_MODEL", "deepseek/deepseek-v4-flash")

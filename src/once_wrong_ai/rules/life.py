@@ -13,8 +13,8 @@ import calendar
 from dataclasses import dataclass
 from datetime import datetime
 
-from once_wrong.report import CellRef, Report
-from once_wrong.rules import RuleSet, Violation
+from once_wrong_ai.report import CellRef, Report
+from once_wrong_ai.rules import RuleSet, Violation
 
 NO_DATE = "00000000"
 NOT_CHANGED = "XED"

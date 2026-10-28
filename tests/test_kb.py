@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from once_wrong.kb.ingest import ingest
-from once_wrong.kb.memory import RuleMemory
-from once_wrong.kb.models import Passage, PassageKind
-from once_wrong.kb.search import Retriever, normalize, tokenize
+from once_wrong_ai.kb.ingest import ingest
+from once_wrong_ai.kb.memory import RuleMemory
+from once_wrong_ai.kb.models import Passage, PassageKind
+from once_wrong_ai.kb.search import Retriever, normalize, tokenize
 
 KB_DIR = Path(__file__).parents[1] / "data" / "kb"
 

@@ -10,8 +10,8 @@ import unicodedata
 from collections.abc import Iterable
 from decimal import Decimal, InvalidOperation
 
-from once_wrong.report import Report
-from once_wrong.rules import Violation
+from once_wrong_ai.report import Report
+from once_wrong_ai.rules import Violation
 
 # 規則代碼、險種代碼這類「英文-數字」的代號不算數字（例如 R-07、ML-05）
 _CODE = re.compile(r"[A-Za-z]+-?\d+")

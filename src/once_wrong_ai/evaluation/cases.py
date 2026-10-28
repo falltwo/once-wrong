@@ -11,8 +11,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from once_wrong.report import Cell, CellRef, Report
-from once_wrong.rules.life import NO_DATE, NOT_CHANGED
+from once_wrong_ai.report import Cell, CellRef, Report
+from once_wrong_ai.rules.life import NO_DATE, NOT_CHANGED
 
 LIFE_COLUMNS = ["公司代號", "保單編號", "保單編號序號", "異動序號", "加保別", "加保日期", "退保別", "退保日期"]
 

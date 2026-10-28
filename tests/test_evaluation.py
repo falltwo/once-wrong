@@ -2,11 +2,11 @@ import random
 
 import pytest
 
-from once_wrong.ai_review.models import ExplanationSource, FixSuggestion, ReviewItem
-from once_wrong.evaluation.cases import MUTATIONS, clean_life_report, make_cases
-from once_wrong.evaluation.run import score_item
-from once_wrong.report import CellRef
-from once_wrong.rules.life import life_field_rules
+from once_wrong_ai.ai_review.models import ExplanationSource, FixSuggestion, ReviewItem
+from once_wrong_ai.evaluation.cases import MUTATIONS, clean_life_report, make_cases
+from once_wrong_ai.evaluation.run import score_item
+from once_wrong_ai.report import CellRef
+from once_wrong_ai.rules.life import life_field_rules
 
 
 @pytest.mark.parametrize("seed", range(50))
@@ -94,7 +94,7 @@ def test_date_shown_via_other_error_on_same_row_is_inferable():
 
 
 def _score(answer, *, restored=False, has_fix=False, source="ai", rule_id="L1305"):
-    from once_wrong.evaluation.run import ItemScore
+    from once_wrong_ai.evaluation.run import ItemScore
 
     return ItemScore(
         case_id="c", mutation="m", rule_id=rule_id, rows=[1], source=source, answer=answer,
@@ -105,7 +105,7 @@ def _score(answer, *, restored=False, has_fix=False, source="ai", rule_id="L1305
 
 
 def test_summary_json_counts_correct_handling():
-    from once_wrong.evaluation.run import summary_json
+    from once_wrong_ai.evaluation.run import summary_json
 
     scores = [
         _score("inferable", restored=True),
@@ -125,7 +125,7 @@ def test_combine_merges_runs(tmp_path):
     import json
     from dataclasses import asdict
 
-    from once_wrong.evaluation.run import combine
+    from once_wrong_ai.evaluation.run import combine
 
     dirs = []
     for seed, scores in [(1, [_score("inferable", restored=True)]), (2, [_score("unknowable", has_fix=True)])]:
