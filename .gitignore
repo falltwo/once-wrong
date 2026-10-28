@@ -18,3 +18,9 @@ htmlcov/
 *.db-shm
 /backend/data/
 .DS_Store
+logs/
+*.egg-info/
+!.env.example
+manuals/*
+!manuals/README.md
+data/kb/
