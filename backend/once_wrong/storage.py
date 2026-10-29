@@ -10,7 +10,24 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from .validation import RULE_VERSION, SCHEMA_PROFILE, ApiError, parse_csv, summary, validate
+from . import database
+from .filing import (
+    FILING_RULE_VERSION,
+    FILING_SCHEMA_PROFILE,
+    evaluate_filing,
+    parse_filing,
+)
+from .validation import (
+    PROFILE_RULE_VERSIONS,
+    SCHEMA_PROFILE,
+    ApiError,
+    parse_profile_csv,
+    summary,
+    validate,
+    validate_profile,
+)
+
+SUGGESTION_CACHE_REVISION = "error-cells-v2-normalized"
 
 
 def _now() -> str:
@@ -25,6 +42,7 @@ class Store:
     def _connection(self):
         connection = sqlite3.connect(self.database_path, timeout=30, isolation_level=None)
         connection.row_factory = sqlite3.Row
+        database.register_functions(connection)
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA busy_timeout = 30000")
         try:
@@ -45,6 +63,7 @@ class Store:
 
     def initialize(self, *, seed_demo: bool) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        self._backup_before_migration()
         with self._connection() as connection:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.executescript(
@@ -75,10 +94,60 @@ class Store:
                 );
                 CREATE INDEX IF NOT EXISTS versions_report_order
                     ON versions(report_id, number);
+                CREATE TABLE IF NOT EXISTS suggestions (
+                    version_id TEXT NOT NULL REFERENCES versions(id),
+                    issue_id TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    cache_revision TEXT NOT NULL DEFAULT '',
+                    PRIMARY KEY (version_id, issue_id)
+                );
                 """
             )
+        with self._transaction() as connection:
+            # Old caches were validated against whole rows. Preserve them, but
+            # never serve them under the stricter error-cell policy.
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(suggestions)")}
+            if "cache_revision" not in columns:
+                connection.execute(
+                    "ALTER TABLE suggestions ADD COLUMN cache_revision TEXT NOT NULL DEFAULT ''"
+                )
+            report_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(reports)")
+            }
+            for name, kind in (
+                ("company_code", "TEXT"), ("product", "TEXT"), ("filing_year", "INTEGER")
+            ):
+                if name not in report_columns:
+                    connection.execute(f"ALTER TABLE reports ADD COLUMN {name} {kind}")
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS reports_filing_identity "
+                "ON reports(company_code,product,filing_year) "
+                "WHERE company_code IS NOT NULL AND product IS NOT NULL "
+                "AND filing_year IS NOT NULL"
+            )
+        with self._connection() as connection:
+            database.initialize(connection)
+        with self._transaction() as connection:
+            database.migrate_existing(connection)
         if seed_demo:
             self._seed_demo()
+
+    def _backup_before_migration(self) -> None:
+        if not self.database_path.exists() or self.database_path.stat().st_size == 0:
+            return
+        with self._connection() as connection:
+            if connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='version_state'"
+            ).fetchone():
+                return
+            backup_dir = self.database_path.parent / "backups"
+            backup_dir.mkdir(exist_ok=True)
+            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+            target = backup_dir / f"{self.database_path.stem}.pre-normalized-{stamp}.sqlite3"
+            with sqlite3.connect(target) as backup:
+                connection.backup(backup)
 
     @staticmethod
     def _report_record(connection: sqlite3.Connection, report_id: str) -> sqlite3.Row:
@@ -95,20 +164,39 @@ class Store:
         return record
 
     @staticmethod
-    def _can_submit(version: dict | None) -> bool:
+    def _can_submit(version: dict | None, connection: sqlite3.Connection) -> bool:
         if not version:
             return False
+        profile = version["schemaProfileId"]
+        if profile == FILING_SCHEMA_PROFILE:
+            check = evaluate_filing(
+                version["files"], rules=database.load_rules(connection, profile)
+            )
+            return (
+                version["ruleVersion"] == FILING_RULE_VERSION
+                and check["summary"]["notEvaluatedChecks"] == 0
+                and not check["issues"]
+            )
+        supported = PROFILE_RULE_VERSIONS.get(profile)
+        if supported is None:
+            return False
         return (
-            version["schemaProfileId"] == SCHEMA_PROFILE
-            and version["ruleVersion"] == RULE_VERSION
+            version["ruleVersion"] == supported
             and version["validationStatus"] == "completed"
             and version["summary"]["notEvaluatedChecks"] == 0
-            and not validate(version["rows"])
+            and not (
+                validate(version["rows"])
+                if profile == SCHEMA_PROFILE
+                else validate_profile(
+                    version["rows"], profile,
+                    rules=database.load_rules(connection, profile, version["ruleVersion"]),
+                )
+            )
         )
 
     def _report_payload(self, connection: sqlite3.Connection, record: sqlite3.Row) -> dict:
         versions = [
-            json.loads(row["payload_json"])
+            database.enrich_version(connection, json.loads(row["payload_json"]))
             for row in connection.execute(
                 "SELECT payload_json FROM versions WHERE report_id = ? ORDER BY number",
                 (record["id"],),
@@ -122,7 +210,7 @@ class Store:
             "canSubmit": bool(
                 versions
                 and record["submitted_version_id"] != versions[-1]["id"]
-                and self._can_submit(versions[-1])
+                and self._can_submit(versions[-1], connection)
             ),
         }
         if record["submitted_version_id"]:
@@ -151,13 +239,17 @@ class Store:
         version_id: str | None = None,
         created_at: str | None = None,
     ) -> dict:
-        rows = parse_csv(raw)
+        parsed = parse_profile_csv(raw)
+        rows = parsed.rows
         previous_record = connection.execute(
             "SELECT payload_json FROM versions WHERE report_id = ? ORDER BY number DESC LIMIT 1",
             (report_id,),
         ).fetchone()
         previous = json.loads(previous_record["payload_json"]) if previous_record else None
-        issues = validate(rows, previous["issues"] if previous else None)
+        issues = validate_profile(
+            rows, parsed.schema_profile_id,
+            rules=database.load_rules(connection, parsed.schema_profile_id, parsed.rule_version),
+        )
         source_hash = hashlib.sha256(raw).hexdigest()
         version = {
             "id": version_id or str(uuid4()),
@@ -166,13 +258,32 @@ class Store:
             "createdAt": created_at or _now(),
             "rows": rows,
             "issues": issues,
-            "schemaProfileId": SCHEMA_PROFILE,
-            "ruleVersion": RULE_VERSION,
+            "schemaProfileId": parsed.schema_profile_id,
+            "ruleVersion": parsed.rule_version,
             "validationStatus": "completed",
             "validationRunId": str(uuid4()),
             "sourceSha256": source_hash,
-            "summary": summary(rows, issues),
+            "summary": summary(rows, issues, profile_id=parsed.schema_profile_id),
         }
+        if parsed.schema_profile_id != SCHEMA_PROFILE:
+            version["columns"] = parsed.columns
+        source = {
+            "id": str(uuid4()),
+            "datasetType": "DEMO" if parsed.schema_profile_id == SCHEMA_PROFILE else "LIFE_UW",
+            "filename": filename, "sourceBytes": raw, "sourceSha256": source_hash,
+            "columns": parsed.columns, "rows": rows,
+        }
+        return Store._persist_version(connection, report_id, version, [source], raw)
+
+    @staticmethod
+    def _persist_version(connection, report_id, version, files, raw):
+        version["issues"] = [
+            {key: value for key, value in item.items() if value is not None}
+            for item in database.annotate_history(
+                connection, report_id, version["number"], version["issues"],
+                version["schemaProfileId"],
+            )
+        ]
         connection.execute(
             """INSERT INTO versions
                (id, report_id, number, payload_json, source_bytes, source_sha256)
@@ -183,10 +294,92 @@ class Store:
                 version["number"],
                 json.dumps(version, ensure_ascii=False),
                 raw,
-                source_hash,
+                version["sourceSha256"],
             ),
         )
+        database.persist_version(connection, version, report_id, files)
         return version
+
+    @staticmethod
+    def _insert_filing(connection, report_id, inputs):
+        parsed = parse_filing(inputs)
+        report = Store._report_record(connection, report_id)
+        year = int(report["period"][:4])
+        if parsed.filing_year is not None and parsed.filing_year != year:
+            raise ApiError(422, "FILING_YEAR_MISMATCH", "申報檔年度與報表期間不一致。")
+        if report["company_code"] and report["company_code"] != parsed.company_code:
+            raise ApiError(422, "FILING_COMPANY_MISMATCH", "修訂必須屬於同一家公司。")
+        existing = connection.execute(
+            "SELECT id FROM reports WHERE company_code=? AND product='life' "
+            "AND filing_year=? AND id<>?", (parsed.company_code, year, report_id),
+        ).fetchone()
+        if existing:
+            raise ApiError(
+                409, "REPORT_ALREADY_EXISTS", "該公司、險種與年度已有申報，請在原報表新增修訂。",
+                {"reportId": existing["id"]},
+            )
+        connection.execute(
+            "UPDATE reports SET company_code=?, product='life', filing_year=? WHERE id=?",
+            (parsed.company_code, year, report_id),
+        )
+        result = evaluate_filing(
+            parsed, rules=database.load_rules(connection, FILING_SCHEMA_PROFILE)
+        )
+        number = connection.execute(
+            "SELECT COALESCE(max(number),0)+1 FROM versions WHERE report_id=?", (report_id,)
+        ).fetchone()[0]
+        digest = database.manifest_sha256(parsed.files)
+        manifest = sorted((file["datasetType"], file["sourceSha256"]) for file in parsed.files)
+        raw = json.dumps(manifest, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        version = {
+            "id": str(uuid4()), "number": number,
+            "filename": " + ".join(file["filename"] for file in parsed.files),
+            "createdAt": _now(), "rows": parsed.rows, "columns": parsed.columns,
+            "files": parsed.files, "issues": result["issues"],
+            "schemaProfileId": FILING_SCHEMA_PROFILE, "ruleVersion": FILING_RULE_VERSION,
+            "validationStatus": "completed", "validationRunId": str(uuid4()),
+            "sourceSha256": digest, "manifestSha256": digest,
+            "summary": result["summary"], "evidence": result["evidence"],
+        }
+        sources = [
+            {**file, "sourceBytes": parsed.raw_by_file[file["id"]]} for file in parsed.files
+        ]
+        return Store._persist_version(connection, report_id, version, sources, raw)
+
+    def create_filing(self, name, period, inputs):
+        report_id = str(uuid4())
+        with self._transaction() as connection:
+            connection.execute(
+                "INSERT INTO reports(id,name,period) VALUES(?,?,?)", (report_id, name, period)
+            )
+            self._insert_filing(connection, report_id, inputs)
+            return self._report_payload(connection, self._report_record(connection, report_id))
+
+    def add_filing(self, report_id, inputs):
+        with self._transaction() as connection:
+            version = self._insert_filing(connection, report_id, inputs)
+            connection.execute(
+                "UPDATE reports SET submitted_version_id=NULL WHERE id=?", (report_id,)
+            )
+            return version
+
+    def rule_sets(self):
+        with self._connection() as connection:
+            return {
+                profile: database.load_rules(connection, profile)
+                for profile in PROFILE_RULE_VERSIONS
+            }
+
+    def create_report(self, name: str, period: str, raw: bytes, filename: str) -> dict:
+        """Commit a report and its validated first version together, or neither."""
+        report_id = str(uuid4())
+        with self._transaction() as connection:
+            connection.execute(
+                "INSERT INTO reports (id, name, period) VALUES (?, ?, ?)",
+                (report_id, name, period),
+            )
+            self._insert_version(connection, report_id, raw, filename)
+            return self._report_payload(connection, self._report_record(connection, report_id))
 
     def add_version(self, report_id: str, raw: bytes, filename: str) -> dict:
         with self._transaction() as connection:
@@ -202,27 +395,58 @@ class Store:
         with self._connection() as connection:
             record = self._version_record(connection, version_id)
             payload = json.loads(record["payload_json"])
+            if payload["schemaProfileId"] == FILING_SCHEMA_PROFILE:
+                raise ApiError(
+                    409, "FILE_ID_REQUIRED", "此版本有申報檔案清單，請指定 fileId 下載。"
+                )
             return bytes(record["source_bytes"]), payload["filename"], record["source_sha256"]
 
-    def get_suggestion(self, version_id: str, issue_id: str) -> dict:
+    def get_file_source(self, version_id, file_id):
         with self._connection() as connection:
-            version = json.loads(self._version_record(connection, version_id)["payload_json"])
-        issue = next((item for item in version["issues"] if item["id"] == issue_id), None)
-        if issue is None:
-            raise ApiError(404, "ISSUE_NOT_FOUND", "此修訂找不到指定問題。")
-        if issue["ruleId"] == "R-07":
-            actual, expected = issue["actual"], issue["expected"]
-            explanation = (
-                f"示範規則 R-07：本月期初 {actual:,} 元與上月期末 {expected:,} 元不一致，"
-                f"差額為 {abs(actual - expected):,} 元。請核對來源資料；"
-                "兩個值不一致無法判定哪個值應修改。尚未接入 AI 或執行候選副本重驗。"
+            self._version_record(connection, version_id)
+            source = connection.execute(
+                "SELECT source_bytes,filename,source_sha256 FROM version_file "
+                "WHERE version_id=? AND id=?", (version_id, file_id),
+            ).fetchone()
+            if source is None:
+                raise ApiError(404, "FILE_NOT_FOUND", "此版本找不到指定檔案。")
+            return bytes(source[0]), source[1], source[2]
+
+    def get_version(self, version_id: str) -> dict:
+        with self._connection() as connection:
+            record = self._version_record(connection, version_id)
+            version = database.enrich_version(connection, json.loads(record["payload_json"]))
+            return {**version, "reportId": record["report_id"]}
+
+    def save_review(self, version_id, issue_id, payload):
+        with self._transaction() as connection:
+            review = {**payload, "candidates": payload.get("_candidates")}
+            database.persist_ai_review(connection, version_id, issue_id, review)
+
+    def get_cached_suggestion(self, version_id: str, issue_id: str) -> dict | None:
+        with self._connection() as connection:
+            record = connection.execute(
+                """SELECT payload_json FROM suggestions
+                   WHERE version_id = ? AND issue_id = ? AND cache_revision = ?""",
+                (version_id, issue_id, SUGGESTION_CACHE_REVISION),
+            ).fetchone()
+            payload = json.loads(record["payload_json"]) if record else None
+            return payload if payload and payload["source"] == "ai" else None
+
+    def save_suggestion(self, version_id: str, issue_id: str, payload: dict) -> None:
+        if payload["source"] != "ai":
+            return
+        with self._transaction() as connection:
+            connection.execute(
+                """INSERT INTO suggestions
+                   (version_id, issue_id, payload_json, model, created_at, cache_revision)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(version_id, issue_id) DO UPDATE SET
+                     payload_json = excluded.payload_json, model = excluded.model,
+                     created_at = excluded.created_at, cache_revision = excluded.cache_revision""",
+                (version_id, issue_id, json.dumps(payload, ensure_ascii=False),
+                 payload["model"], _now(), SUGGESTION_CACHE_REVISION),
             )
-        else:
-            explanation = (
-                "示範規則 R-01：險種代碼空白。請查閱來源資料補上正確代碼；"
-                "目前沒有可靠的修正值，尚未接入 AI 或執行候選副本重驗。"
-            )
-        return {"explanation": explanation, "verification": "unavailable", "source": "demo"}
 
     def confirm(self, report_id: str, version_id: str) -> None:
         with self._transaction() as connection:
@@ -234,8 +458,8 @@ class Store:
             version = json.loads(record["payload_json"]) if record else None
             if version is None or version["id"] != version_id:
                 raise ApiError(409, "STALE_VERSION", "只能確認目前最新的修訂。")
-            if not self._can_submit(version):
-                raise ApiError(409, "VALIDATION_FAILED", "最新修訂尚未通過示範範圍的後端檢核。")
+            if not self._can_submit(version, connection):
+                raise ApiError(409, "VALIDATION_FAILED", "最新修訂尚未通過此資料格式的後端檢核。")
             # No remote submission occurs. Record the actual immutable input and rule release.
             connection.execute(
                 """INSERT INTO confirmations
@@ -248,11 +472,16 @@ class Store:
                     version_id,
                     _now(),
                     record["source_sha256"],
-                    RULE_VERSION,
+                    version["ruleVersion"],
                 ),
             )
             connection.execute(
                 "UPDATE reports SET submitted_version_id = ? WHERE id = ?", (version_id, report_id)
+            )
+            database.append_audit(
+                connection, "version_confirmed", version_id=version_id,
+                payload={"sourceSha256": record["source_sha256"],
+                         "ruleVersion": version["ruleVersion"]},
             )
 
     def _seed_demo(self) -> None:
