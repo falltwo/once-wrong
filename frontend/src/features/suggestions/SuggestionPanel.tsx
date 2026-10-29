@@ -3,23 +3,25 @@ import { useQuery } from "@tanstack/react-query";
 import { Search, ShieldCheck, Sparkles, X } from "lucide-react";
 import { reportsApi } from "../../api/reports";
 import type { Issue } from "../../types";
-import { money } from "../../utils/format";
+import {
+  formatCell,
+  issueFacts,
+  issueLocation,
+  lifeFieldLabels,
+} from "../../utils/reportData";
 
 const fieldNames: Record<string, string> = {
+  ...lifeFieldLabels,
   id: "資料 ID",
   product: "險種代碼",
   previous: "上月期末",
   opening: "本月期初",
 };
 
-const formatValue = (value: string | number | null) => {
-  if (value === null || value === "") return "（空白）";
-  if (typeof value === "number") return money(value);
-  return value;
-};
+const formatValue = formatCell;
 
 const sourceLabels = {
-  ai: "Gemini AI",
+  ai: "AI 審核",
   fallback_llm_error: "固定說明 · AI 暫不可用",
   fallback_number_guard: "固定說明 · 數字檢查未通過",
 } as const;
@@ -68,33 +70,36 @@ export function SuggestionPanel({
         </div>
         <h2>{issue.title}</h2>
         <p className="muted">
-          資料 {issue.rowId} ·{" "}
-          {issue.field === "opening" ? "本月期初" : "險種代碼"}
+          {issueLocation(issue)} · {issue.ruleId}
         </p>
         <div className="comparison">
-          <div>
-            <span>目前資料</span>
-            <strong className="text-red">
-              {typeof issue.actual === "number"
-                ? money(issue.actual)
-                : issue.actual}
-            </strong>
-          </div>
-          <div>
-            <span>
-              {issue.expected !== undefined ? "規則預期值" : "修正方式"}
-            </span>
-            <strong>
-              {issue.expected !== undefined
-                ? money(issue.expected)
-                : "核對來源資料"}
-            </strong>
-          </div>
+          {issueFacts(issue).map(([field, value]) => (
+            <div key={field}>
+              <span>{fieldNames[field] ?? field}</span>
+              <strong className="text-red">{formatValue(value)}</strong>
+            </div>
+          ))}
+          {issue.expected !== undefined && (
+            <div>
+              <span>規則預期值</span>
+              <strong>{formatValue(issue.expected)}</strong>
+            </div>
+          )}
+          {!issueFacts(issue).length && issue.expected === undefined && (
+            <div>
+              <span>修正方式</span>
+              <strong>核對來源資料</strong>
+            </div>
+          )}
         </div>
         <div className="ai-title">
           <Sparkles size={17} />
           <strong>白話說明</strong>
-          {query.data && <span>{sourceLabels[query.data.source]}</span>}
+          {query.data && (
+            <span>
+              {sourceLabels[query.data.source]} · {query.data.model}
+            </span>
+          )}
         </div>
         {query.isPending ? (
           <p className="muted" role="status">

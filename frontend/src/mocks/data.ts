@@ -16,29 +16,56 @@ export function initialReports(): Report[] {
     opening: r.id === "POL-001" ? 9800000 : r.opening,
   }));
   const firstIssues = validate(firstRows);
+  const makeVersion = (
+    id: string,
+    number: number,
+    filename: string,
+    createdAt: string,
+    versionRows: DataRow[],
+    issues: ReturnType<typeof validate>,
+  ) => ({
+    id,
+    number,
+    filename,
+    createdAt,
+    rows: versionRows,
+    issues,
+    schemaProfileId: "demo_csv_v1" as const,
+    ruleVersion: "demo_rules_v1" as const,
+    validationStatus: "completed" as const,
+    validationRunId: `mock-run-${id}`,
+    sourceSha256: "mock-data-not-a-source-file-hash",
+    summary: {
+      totalChecks: versionRows.length * 2,
+      passedChecks: versionRows.length * 2 - issues.length,
+      failedChecks: issues.length,
+      notEvaluatedChecks: 0,
+    },
+  });
   return [
     {
       id: "reserve-202609",
       name: "準備金月報",
       period: "2026-09",
       versions: [
-        {
-          id: "v1",
-          number: 1,
-          filename: "reserve_202609_v1.csv",
-          createdAt: "2026-10-24T09:30:00+08:00",
-          rows: firstRows,
-          issues: firstIssues,
-        },
-        {
-          id: "v2",
-          number: 2,
-          filename: "reserve_202609_v2.csv",
-          createdAt: "2026-10-24T10:15:00+08:00",
+        makeVersion(
+          "v1",
+          1,
+          "reserve_202609_v1.csv",
+          "2026-10-24T09:30:00+08:00",
+          firstRows,
+          firstIssues,
+        ),
+        makeVersion(
+          "v2",
+          2,
+          "reserve_202609_v2.csv",
+          "2026-10-24T10:15:00+08:00",
           rows,
-          issues: validate(rows, firstIssues),
-        },
+          validate(rows, firstIssues),
+        ),
       ],
+      canSubmit: false,
     },
   ];
 }

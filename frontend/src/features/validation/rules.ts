@@ -15,7 +15,7 @@ export function validate(rows: DataRow[], previous: Issue[] = []): Issue[] {
         expected: row.previous,
         repeated: false,
       });
-    if (!row.product.trim())
+    if (!(row.product ?? "").trim())
       issues.push({
         id: `${row.id}:R-01`,
         ruleId: "R-01",

@@ -11,6 +11,7 @@ import { reportsApi } from "../api/reports";
 import { Loading, ErrorState } from "../components/QueryStates";
 import { exportReport } from "../utils/exportReport";
 import { date } from "../utils/format";
+import { issueLocation } from "../utils/reportData";
 
 export function CheckReportPage() {
   const { reportId = "" } = useParams();
@@ -49,7 +50,7 @@ export function CheckReportPage() {
           <div className="eyebrow">VALIDATION RECORD</div>
           <h1>檢核報告與版本紀錄</h1>
           <p>
-            {report.period} {report.name} · 示範規則結果
+            {report.period} {report.name} · {version.schemaProfileId} / {version.ruleVersion}
           </p>
         </div>
         <button
@@ -75,7 +76,7 @@ export function CheckReportPage() {
         {version.issues.map((issue) => (
           <div className="record-issue" key={issue.id}>
             <span className="rule-tag">{issue.ruleId}</span>
-            <strong>{issue.rowId}</strong>
+            <strong>{issueLocation(issue)}</strong>
             <span>{issue.title}</span>
             <span className={`status ${issue.repeated ? "bad" : "warning"}`}>
               {issue.repeated ? "重複錯誤" : "待修正"}

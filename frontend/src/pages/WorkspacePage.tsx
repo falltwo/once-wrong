@@ -25,6 +25,14 @@ import { UploadDialog } from "../features/upload/UploadDialog";
 import { SuggestionPanel } from "../features/suggestions/SuggestionPanel";
 import { exportReport } from "../utils/exportReport";
 import { date, money } from "../utils/format";
+import {
+  formatCell,
+  issueAffectsCell,
+  issueAffectsRow,
+  lifeFieldLabels,
+  rowLabel,
+  rowValues,
+} from "../utils/reportData";
 import type { Report } from "../types";
 
 export function WorkspacePage() {
@@ -83,14 +91,17 @@ export function Workspace({ report }: { report: Report }) {
     },
   });
   const visibleRows = version.rows.filter((row) => {
-    const issues = version.issues.filter((i) => i.rowId === row.id);
+    const issues = version.issues.filter((issue) => issueAffectsRow(issue, row));
+    const searchable = `${row.id} ${row.row ?? ""} ${Object.values(rowValues(row)).join(" ")}`;
     return (
       (filter === "all" ||
         (filter === "errors" && issues.length) ||
         (filter === "repeated" && issues.some((i) => i.repeated))) &&
-      `${row.id} ${row.product}`.toLowerCase().includes(search.toLowerCase())
+      searchable.toLowerCase().includes(search.toLowerCase())
     );
   });
+  const columns = version.columns ?? ["product", "previous", "opening"];
+  const isLifeProfile = version.schemaProfileId === "life_underwriting_v1";
   return (
     <main className="workspace">
       <Link className="back-link" to="/reports">
@@ -262,7 +273,7 @@ export function Workspace({ report }: { report: Report }) {
                 aria-label="搜尋資料"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="搜尋代碼或 ID"
+                placeholder="搜尋資料列或欄位內容"
               />
             </label>
           </div>
@@ -270,36 +281,53 @@ export function Workspace({ report }: { report: Report }) {
             <table>
               <thead>
                 <tr>
-                  <th>資料 ID</th>
-                  <th>險種</th>
-                  <th className="number">上月期末</th>
-                  <th className="number">本月期初</th>
+                  <th>{isLifeProfile ? "資料列" : "資料 ID"}</th>
+                  {columns.map((column) => (
+                    <th key={column}>
+                      {lifeFieldLabels[column] ??
+                        ({
+                          product: "險種",
+                          previous: "上月期末",
+                          opening: "本月期初",
+                        }[column] ?? column)}
+                    </th>
+                  ))}
                   <th>檢核狀態</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleRows.map((row) => {
                   const issues = version.issues.filter(
-                    (i) => i.rowId === row.id,
+                    (issue) => issueAffectsRow(issue, row),
                   );
+                  const values = rowValues(row);
                   const issue = issues[0];
                   return (
                     <tr
                       key={row.id}
                       className={
-                        selected?.rowId === row.id ? "selected-row" : ""
+                        selected && issueAffectsRow(selected, row) ? "selected-row" : ""
                       }
                     >
-                      <td className="row-id">{row.id}</td>
-                      <td className={!row.product ? "invalid-cell" : ""}>
-                        {row.product || "（空白）"}
-                      </td>
-                      <td className="number">{money(row.previous)}</td>
-                      <td
-                        className={`number ${issues.some((i) => i.field === "opening") ? "invalid-cell" : ""}`}
-                      >
-                        {money(row.opening)}
-                      </td>
+                      <td className="row-id">{rowLabel(row)}</td>
+                      {columns.map((column) => {
+                        const value = values[column] ?? null;
+                        const invalid = issues.some((currentIssue) =>
+                          issueAffectsCell(currentIssue, row, column),
+                        );
+                        const isAmount =
+                          !isLifeProfile &&
+                          (column === "previous" || column === "opening") &&
+                          typeof value === "number";
+                        return (
+                          <td
+                            key={column}
+                            className={`${isAmount ? "number" : ""} ${invalid ? "invalid-cell" : ""}`}
+                          >
+                            {isAmount ? money(value as number) : formatCell(value)}
+                          </td>
+                        );
+                      })}
                       <td>
                         {issue ? (
                           <div className="row-issues">

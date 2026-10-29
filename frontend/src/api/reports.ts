@@ -1,6 +1,13 @@
 // Copy to frontend/src/api/reports.ts on frontend PR #1, then apply frontend-pr1.patch.
 // This adapter always uses the backend. It never reads localStorage or falls back to mocks.
-import type { Issue, Report, Suggestion, Version } from "../types";
+import type {
+  AIEvaluation,
+  BackendHealth,
+  Issue,
+  Report,
+  Suggestion,
+  Version,
+} from "../types";
 
 const env = (
   import.meta as ImportMeta & {
@@ -11,7 +18,7 @@ const configuredBase = env?.VITE_API_BASE_URL;
 const API_BASE = (
   typeof configuredBase === "string" && configuredBase.trim()
     ? configuredBase.trim()
-    : "http://127.0.0.1:8000"
+    : "/api"
 ).replace(/\/+$/, "");
 
 function errorMessage(body: unknown, fallback: string): string {
@@ -78,6 +85,12 @@ export function download(
 }
 
 export const reportsApi = {
+  health(): Promise<BackendHealth> {
+    return request<BackendHealth>("/health");
+  },
+  evaluationLatest(): Promise<AIEvaluation> {
+    return request<AIEvaluation>("/evaluations/latest");
+  },
   list(): Promise<Report[]> {
     return request<Report[]>("/reports");
   },

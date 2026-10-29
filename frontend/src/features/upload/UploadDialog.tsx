@@ -66,11 +66,12 @@ export function UploadDialog({
         disabled={mutation.isPending}
         onChange={(e) => choose(e.target.files?.[0])}
       />
-      <p className="muted">
-        必要欄位：<code>id, product, previous, opening</code>
-        <br />
-        使用固定的 id，讓系統辨識跨版本的同一筆資料。
-      </p>
+      <div className="muted">
+        <p>請上傳與此報表相同格式的 CSV，後端會依表頭辨識 profile。</p>
+        <p><code>demo_csv_v1</code>：<code>id, product, previous, opening</code></p>
+        <p><code>life_underwriting_v1</code>：公司代號、保單編號、保單編號序號、異動序號、加保別、加保日期、退保別、退保日期（欄位順序可不同）</p>
+        <p>CSV 上限 2 MB、最多 1,000 筆；壽險版本的重複錯誤目前依資料列位置比較。</p>
+      </div>
       <div className="sample-links">
         <a href="/sample-errors.csv" download>
           含錯誤範例

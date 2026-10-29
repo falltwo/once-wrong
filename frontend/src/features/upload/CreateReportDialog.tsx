@@ -30,7 +30,7 @@ export function CreateReportDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog title="新增報表・上傳第一版" onClose={onClose} busy={mutation.isPending}>
-      <p className="muted">輸入報表名稱與月份，再上傳 CSV。檢核成功後會建立第 1 版。</p>
+      <p className="muted">輸入報表名稱與月份，再上傳 CSV。後端會依表頭辨識資料格式，並建立第 1 版。</p>
       <div className="new-report-fields">
         <label>
           報表名稱
@@ -80,9 +80,12 @@ export function CreateReportDialog({ onClose }: { onClose: () => void }) {
         disabled={mutation.isPending}
         onChange={(event) => choose(event.target.files?.[0])}
       />
-      <p className="muted">
-        必要欄位：<code>id, product, previous, opening</code>
-      </p>
+      <div className="muted">
+        <p>支援兩種 CSV 表頭：</p>
+        <p><code>id, product, previous, opening</code></p>
+        <p><code>公司代號, 保單編號, 保單編號序號, 異動序號, 加保別, 加保日期, 退保別, 退保日期</code></p>
+        <p>壽險欄位以文字保留，代號、序號與日期的前置 0 不會轉成數字。</p>
+      </div>
       <div className="sample-links">
         <a href="/sample-errors.csv" download>含錯誤範例</a>
         <a href="/sample-fixed.csv" download>已修正範例</a>

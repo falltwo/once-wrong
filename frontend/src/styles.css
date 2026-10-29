@@ -1066,6 +1066,10 @@ td {
 .setup-methods {
   color: #647b55;
 }
+.rule-version {
+  color: #647b55;
+  font-size: 14px !important;
+}
 .evaluation-heading {
   margin-top: 27px;
 }
@@ -1081,6 +1085,9 @@ td {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+.evaluation-page .method-cards {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 .method-card {
   min-width: 0;
