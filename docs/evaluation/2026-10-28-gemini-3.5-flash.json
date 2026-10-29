@@ -1,0 +1,389 @@
+{
+  "schemaVersion": 1,
+  "model": "gemini-3.5-flash",
+  "generatedAt": "2026-10-28T23:18:10+08:00",
+  "dataset": {
+    "description": "程式產生的虛構個人壽險承保資料，每個案例弄壞一處，被改掉之前的值是標準答案",
+    "product": "個人壽險",
+    "rules": "life_field_rules（11 條）",
+    "cases": 390,
+    "violations": 595
+  },
+  "runs": [
+    {
+      "seed": 1,
+      "cases": 130,
+      "policies": 8,
+      "violations": 198,
+      "model": "gemini-3.5-flash",
+      "elapsedSeconds": 516,
+      "dir": "20261028-213031",
+      "handledCorrectly": {
+        "count": 182,
+        "total": 198,
+        "rate": 0.9192
+      }
+    },
+    {
+      "seed": 2,
+      "cases": 130,
+      "policies": 8,
+      "violations": 197,
+      "model": "gemini-3.5-flash",
+      "elapsedSeconds": 529,
+      "dir": "20261028-213908",
+      "handledCorrectly": {
+        "count": 184,
+        "total": 197,
+        "rate": 0.934
+      }
+    },
+    {
+      "seed": 3,
+      "cases": 130,
+      "policies": 8,
+      "violations": 200,
+      "model": "gemini-3.5-flash",
+      "elapsedSeconds": 572,
+      "dir": "20261028-214758",
+      "handledCorrectly": {
+        "count": 188,
+        "total": 200,
+        "rate": 0.94
+      }
+    }
+  ],
+  "metrics": {
+    "handledCorrectly": {
+      "count": 554,
+      "total": 595,
+      "rate": 0.9311
+    },
+    "restoredWhenInferable": {
+      "count": 420,
+      "total": 441,
+      "rate": 0.9524
+    },
+    "heldBackWhenNotInferable": {
+      "count": 134,
+      "total": 154,
+      "rate": 0.8701
+    },
+    "citedRule": {
+      "count": 595,
+      "total": 595,
+      "rate": 1.0
+    },
+    "aiExplanationUsed": {
+      "count": 589,
+      "total": 595,
+      "rate": 0.9899
+    },
+    "numberGuardBlocked": {
+      "count": 6,
+      "total": 595,
+      "rate": 0.0101
+    },
+    "llmErrors": {
+      "count": 0,
+      "total": 595,
+      "rate": 0.0
+    }
+  },
+  "outcomes": {
+    "inferable": {
+      "restored": 420,
+      "otherFix": 2,
+      "noFix": 19,
+      "allBlocked": 0
+    },
+    "unknowable": {
+      "noFix": 60,
+      "guessedFix": 20,
+      "allBlocked": 7
+    },
+    "otherRows": {
+      "noFix": 67,
+      "guessedFix": 0,
+      "allBlocked": 0
+    },
+    "rejectedByRevalidation": 17
+  },
+  "byRule": [
+    {
+      "ruleId": "L0302",
+      "violations": 60,
+      "handledCorrectly": {
+        "count": 60,
+        "total": 60,
+        "rate": 1.0
+      },
+      "restoredWhenInferable": {
+        "count": 60,
+        "total": 60,
+        "rate": 1.0
+      },
+      "heldBackWhenNotInferable": {
+        "count": 0,
+        "total": 0,
+        "rate": null
+      },
+      "citedRule": {
+        "count": 60,
+        "total": 60,
+        "rate": 1.0
+      },
+      "numberGuardBlocked": 0
+    },
+    {
+      "ruleId": "L0303",
+      "violations": 52,
+      "handledCorrectly": {
+        "count": 52,
+        "total": 52,
+        "rate": 1.0
+      },
+      "restoredWhenInferable": {
+        "count": 45,
+        "total": 45,
+        "rate": 1.0
+      },
+      "heldBackWhenNotInferable": {
+        "count": 7,
+        "total": 7,
+        "rate": 1.0
+      },
+      "citedRule": {
+        "count": 52,
+        "total": 52,
+        "rate": 1.0
+      },
+      "numberGuardBlocked": 0
+    },
+    {
+      "ruleId": "L1303",
+      "violations": 30,
+      "handledCorrectly": {
+        "count": 30,
+        "total": 30,
+        "rate": 1.0
+      },
+      "restoredWhenInferable": {
+        "count": 0,
+        "total": 0,
+        "rate": null
+      },
+      "heldBackWhenNotInferable": {
+        "count": 30,
+        "total": 30,
+        "rate": 1.0
+      },
+      "citedRule": {
+        "count": 30,
+        "total": 30,
+        "rate": 1.0
+      },
+      "numberGuardBlocked": 0
+    },
+    {
+      "ruleId": "L1304",
+      "violations": 60,
+      "handledCorrectly": {
+        "count": 54,
+        "total": 60,
+        "rate": 0.9
+      },
+      "restoredWhenInferable": {
+        "count": 26,
+        "total": 30,
+        "rate": 0.8667
+      },
+      "heldBackWhenNotInferable": {
+        "count": 28,
+        "total": 30,
+        "rate": 0.9333
+      },
+      "citedRule": {
+        "count": 60,
+        "total": 60,
+        "rate": 1.0
+      },
+      "numberGuardBlocked": 0
+    },
+    {
+      "ruleId": "L1305",
+      "violations": 167,
+      "handledCorrectly": {
+        "count": 165,
+        "total": 167,
+        "rate": 0.988
+      },
+      "restoredWhenInferable": {
+        "count": 151,
+        "total": 153,
+        "rate": 0.9869
+      },
+      "heldBackWhenNotInferable": {
+        "count": 14,
+        "total": 14,
+        "rate": 1.0
+      },
+      "citedRule": {
+        "count": 167,
+        "total": 167,
+        "rate": 1.0
+      },
+      "numberGuardBlocked": 4
+    },
+    {
+      "ruleId": "L1402",
+      "violations": 30,
+      "handledCorrectly": {
+        "count": 26,
+        "total": 30,
+        "rate": 0.8667
+      },
+      "restoredWhenInferable": {
+        "count": 15,
+        "total": 15,
+        "rate": 1.0
+      },
+      "heldBackWhenNotInferable": {
+        "count": 11,
+        "total": 15,
+        "rate": 0.7333
+      },
+      "citedRule": {
+        "count": 30,
+        "total": 30,
+        "rate": 1.0
+      },
+      "numberGuardBlocked": 0
+    },
+    {
+      "ruleId": "L1502",
+      "violations": 30,
+      "handledCorrectly": {
+        "count": 15,
+        "total": 30,
+        "rate": 0.5
+      },
+      "restoredWhenInferable": {
+        "count": 15,
+        "total": 30,
+        "rate": 0.5
+      },
+      "heldBackWhenNotInferable": {
+        "count": 0,
+        "total": 0,
+        "rate": null
+      },
+      "citedRule": {
+        "count": 30,
+        "total": 30,
+        "rate": 1.0
+      },
+      "numberGuardBlocked": 1
+    },
+    {
+      "ruleId": "L1504",
+      "violations": 60,
+      "handledCorrectly": {
+        "count": 53,
+        "total": 60,
+        "rate": 0.8833
+      },
+      "restoredWhenInferable": {
+        "count": 52,
+        "total": 52,
+        "rate": 1.0
+      },
+      "heldBackWhenNotInferable": {
+        "count": 1,
+        "total": 8,
+        "rate": 0.125
+      },
+      "citedRule": {
+        "count": 60,
+        "total": 60,
+        "rate": 1.0
+      },
+      "numberGuardBlocked": 0
+    },
+    {
+      "ruleId": "L1602",
+      "violations": 30,
+      "handledCorrectly": {
+        "count": 28,
+        "total": 30,
+        "rate": 0.9333
+      },
+      "restoredWhenInferable": {
+        "count": 26,
+        "total": 26,
+        "rate": 1.0
+      },
+      "heldBackWhenNotInferable": {
+        "count": 2,
+        "total": 4,
+        "rate": 0.5
+      },
+      "citedRule": {
+        "count": 30,
+        "total": 30,
+        "rate": 1.0
+      },
+      "numberGuardBlocked": 1
+    },
+    {
+      "ruleId": "L1607",
+      "violations": 30,
+      "handledCorrectly": {
+        "count": 25,
+        "total": 30,
+        "rate": 0.8333
+      },
+      "restoredWhenInferable": {
+        "count": 0,
+        "total": 0,
+        "rate": null
+      },
+      "heldBackWhenNotInferable": {
+        "count": 25,
+        "total": 30,
+        "rate": 0.8333
+      },
+      "citedRule": {
+        "count": 30,
+        "total": 30,
+        "rate": 1.0
+      },
+      "numberGuardBlocked": 0
+    },
+    {
+      "ruleId": "LU1504",
+      "violations": 46,
+      "handledCorrectly": {
+        "count": 46,
+        "total": 46,
+        "rate": 1.0
+      },
+      "restoredWhenInferable": {
+        "count": 30,
+        "total": 30,
+        "rate": 1.0
+      },
+      "heldBackWhenNotInferable": {
+        "count": 16,
+        "total": 16,
+        "rate": 1.0
+      },
+      "citedRule": {
+        "count": 46,
+        "total": 46,
+        "rate": 1.0
+      },
+      "numberGuardBlocked": 0
+    }
+  ]
+}

@@ -99,7 +99,7 @@ def test_upload_errors_then_fixed_preserves_previous_versions_and_raw_bytes(
     assert client.get(f"/versions/{third['id']}/source").content == errors
 
 
-def test_suggestions_disclose_demo_and_no_verified_replacement(client: TestClient):
+def test_suggestions_return_complete_contract_without_credentials(client: TestClient):
     before = report(client)
     current = before["versions"][-1]
     for issue in current["issues"]:
@@ -107,9 +107,14 @@ def test_suggestions_disclose_demo_and_no_verified_replacement(client: TestClien
         response = client.get(f"/versions/{current['id']}/issues/{issue_id}/suggestion")
         assert response.status_code == 200, response.text
         suggestion = response.json()
-        assert suggestion["source"] == "demo"
+        assert suggestion["source"] == "fallback_llm_error"
         assert suggestion["verification"] == "unavailable"
-        assert suggestion.get("value") is None
+        assert suggestion["suggestion"] is None
+        assert suggestion["rejectedSuggestions"] == []
+        assert suggestion["citations"] == []
+        assert suggestion["blockedNumbers"] == []
+        assert suggestion["title"]
+        assert suggestion["model"]
         assert suggestion["explanation"].strip()
     assert report(client) == before
 

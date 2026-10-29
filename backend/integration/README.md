@@ -1,5 +1,13 @@
 # Frontend PR #1 integration handoff
 
+> Historical handoff for the first demo API. The patch below targets commit
+> `8e2e787` and its old three-field Suggestion shape. Do not apply that patch to
+> the current frontend. For the AI integration use the current
+> [API contract](../../docs/backend-api.md) and the frontend's full Suggestion
+> type. The life profile also requires the frontend to render `rows[].values`,
+> `issues[].cells`, and `facts`; its original demo-only UI cannot display these.
+> The original acceptance steps below document the earlier release.
+
 These assets connect the existing frontend to the backend without copying the frontend into this backend PR or merging its branch. Target frontend commit: `8e2e787d8e892aa1c263f7b0f9a36d91bd6a4a8f` from [Draft PR #1](https://github.com/falltwo/once-wrong/pull/1).
 
 ## Apply in a separate frontend working copy

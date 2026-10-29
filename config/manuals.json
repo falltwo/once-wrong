@@ -1,0 +1,9 @@
+{
+  "manuals": [
+    {"path": "manuals/新式個人壽險填報說明手冊範例&檢核規則_2025.pdf.pdf", "product": "個人壽險", "name": "個人壽險填報說明手冊範例與檢核規則 2025", "id_prefix": "LIFE-RULE"},
+    {"path": "manuals/附件二_人壽保險業個人壽險填報手冊_2025填報年度.pdf", "product": "個人壽險", "name": "人壽保險業個人壽險填報手冊 2025", "id_prefix": "LIFE"},
+    {"path": "manuals/個人年金保險填報手冊.pdf", "product": "個人年金", "name": "個人年金保險填報手冊", "id_prefix": "ANN"},
+    {"path": "manuals/新式傷害保險填報手冊.docx", "product": "傷害保險", "name": "新式傷害保險填報手冊", "id_prefix": "INJ"},
+    {"path": "manuals/新式癌症保險填報手冊_2024.pdf", "product": "癌症保險", "name": "新式癌症保險填報手冊 2024", "id_prefix": "CAN"}
+  ]
+}
