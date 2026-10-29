@@ -1,24 +1,29 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, ShieldCheck, Sparkles, X } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Search, ShieldCheck, Sparkles, X } from "lucide-react";
 import { reportsApi } from "../../api/reports";
-import type { Issue, Version, VersionFile } from "../../types";
-import { money } from "../../utils/format";
-import { repeatState, stateLabel } from "../../utils/issues";
+import type { Issue, Report } from "../../types";
+import {
+  formatCell,
+  datasetLabels,
+  issueFacts,
+  issueLocation,
+  lifeFieldLabels,
+  issueStatus,
+  statusClass,
+  statusLabel,
+} from "../../utils/reportData";
 
 const fieldNames: Record<string, string> = {
+  ...lifeFieldLabels,
   id: "資料 ID",
   product: "險種代碼",
   previous: "上月期末",
   opening: "本月期初",
 };
 
-const formatValue = (value: string | number | null) => {
-  if (value === null || value === "") return "（空白）";
-  if (typeof value === "number") return money(value);
-  return value;
-};
+const formatValue = formatCell;
 
 const sourceLabels = {
   ai: "AI 審核",
@@ -29,16 +34,12 @@ const sourceLabels = {
 export function SuggestionPanel({
   issue,
   versionId,
-  files,
-  reportId,
-  versions,
+  report,
   onClose,
 }: {
   issue: Issue;
   versionId: string;
-  files?: VersionFile[];
-  reportId: string;
-  versions: Version[];
+  report: Report;
   onClose: () => void;
 }) {
   const query = useQuery({
@@ -52,20 +53,6 @@ export function SuggestionPanel({
       : undefined;
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
-  const versionLink = (number: number, label: string) => {
-    const version = versions.find((item) => item.number === number);
-    return version ? (
-      <Link
-        to={`/reports/${reportId}?version=${encodeURIComponent(version.id)}`}
-      >
-        {label}
-      </Link>
-    ) : (
-      label
-    );
-  };
-  const fileLabel = (id?: string) =>
-    files?.find((file) => file.id === id)?.filename ?? id;
   return (
     <aside className="detail-panel">
       <div className="panel-title">
@@ -84,111 +71,78 @@ export function SuggestionPanel({
       <div className="panel-body">
         <div className="issue-tags">
           <span className="rule-tag">{issue.ruleId}</span>
-          <span
-            className={`status ${repeatState(issue) === "new" ? "warning" : "bad"}`}
-          >
-            {stateLabel(issue)}
+          <span className={`status ${statusClass(issueStatus(issue))}`}>
+            {statusLabel(issueStatus(issue))}
           </span>
         </div>
         <h2>{issue.title}</h2>
-        {(issue.firstSeenNumber || issue.prevSeenNumber) && (
-          <p className="issue-history">
-            {issue.firstSeenNumber ? (
-              <>
+        <p className="muted">
+          {issueLocation(issue)} · {issue.ruleId}
+        </p>
+        {(issue.firstSeenNumber ||
+          issue.prevSeenNumber ||
+          issue.fixedInNumber) && (
+          <div className="issue-history" aria-label="錯誤版本歷程">
+            {issue.firstSeenNumber && (
+              <span>
                 首次出現：
-                {versionLink(
-                  issue.firstSeenNumber,
-                  `第 ${issue.firstSeenNumber} 版`,
-                )}
-                <br />
-              </>
-            ) : null}
-            {issue.prevSeenNumber ? (
-              <>
-                前次出現：
-                {versionLink(
-                  issue.prevSeenNumber,
-                  `第 ${issue.prevSeenNumber} 版`,
-                )}
-                <br />
-              </>
-            ) : null}
-            {repeatState(issue) === "regressed" && issue.prevSeenNumber ? (
-              <>
-                曾修好：
-                {versionLink(
-                  issue.prevSeenNumber + 1,
-                  `第 ${issue.prevSeenNumber + 1} 版`,
-                )}
-                ；本版再次出現。
-              </>
-            ) : null}
-          </p>
+                <Link
+                  to={`/reports/${report.id}?version=${report.versions.find((v) => v.number === issue.firstSeenNumber)?.id ?? versionId}`}
+                >
+                  第 {issue.firstSeenNumber} 版
+                </Link>
+              </span>
+            )}
+            {issue.prevSeenNumber && (
+              <span>
+                上次出現：
+                <Link
+                  to={`/reports/${report.id}?version=${report.versions.find((v) => v.number === issue.prevSeenNumber)?.id ?? versionId}`}
+                >
+                  第 {issue.prevSeenNumber} 版
+                </Link>
+              </span>
+            )}
+            {issue.fixedInNumber && (
+              <span>
+                曾修正：
+                <Link
+                  to={`/reports/${report.id}?version=${report.versions.find((v) => v.number === issue.fixedInNumber)?.id ?? versionId}`}
+                >
+                  第 {issue.fixedInNumber} 版
+                </Link>
+              </span>
+            )}
+          </div>
         )}
-        {issue.cells?.length ? (
-          <section className="issue-cells" aria-label="出錯格子">
-            {issue.cells.map((cell) => (
-              <div key={`${cell.fileId ?? ""}:${cell.row}:${cell.column}`}>
-                <small>
-                  {fileLabel(cell.fileId) ? `${fileLabel(cell.fileId)} · ` : ""}
-                  第 {cell.row} 列 · {cell.column}
-                </small>
-                <strong>{formatValue(cell.value)}</strong>
-              </div>
-            ))}
-          </section>
-        ) : (
-          <>
-            <p className="muted">
-              資料 {issue.rowId} ·{" "}
-              {issue.field
-                ? (fieldNames[issue.field] ?? issue.field)
-                : "請核對檢核說明"}
-            </p>
-            <div className="comparison">
-              <div>
-                <span>目前資料</span>
-                <strong className="text-red">
-                  {typeof issue.actual === "number"
-                    ? money(issue.actual)
-                    : (issue.actual ?? "請核對來源")}
-                </strong>
-              </div>
-              <div>
-                <span>
-                  {issue.expected !== undefined ? "規則預期值" : "修正方式"}
-                </span>
-                <strong>
-                  {issue.expected !== undefined
-                    ? money(issue.expected)
-                    : "核對來源資料"}
-                </strong>
-              </div>
+        <div className="comparison">
+          {issueFacts(issue).map(([field, value]) => (
+            <div key={field}>
+              <span>{fieldNames[field] ?? field}</span>
+              <strong className="text-red">{formatValue(value)}</strong>
             </div>
-          </>
-        )}
-        {issue.facts && Object.keys(issue.facts).length > 0 && (
-          <details className="issue-facts">
-            <summary>規則依據與已知值</summary>
-            <dl>
-              {Object.entries(issue.facts).map(([name, value]) => (
-                <div key={name}>
-                  <dt>{name}</dt>
-                  <dd>{formatValue(value)}</dd>
-                </div>
-              ))}
-            </dl>
-          </details>
-        )}
-        {!!issue.contextRowIds?.length && (
-          <p className="muted">
-            參考資料列：{issue.contextRowIds.join("、")}（僅供核對）
-          </p>
-        )}
+          ))}
+          {issue.expected !== undefined && (
+            <div>
+              <span>規則預期值</span>
+              <strong>{formatValue(issue.expected)}</strong>
+            </div>
+          )}
+          {!issueFacts(issue).length && issue.expected === undefined && (
+            <div>
+              <span>修正方式</span>
+              <strong>核對來源資料</strong>
+            </div>
+          )}
+        </div>
         <div className="ai-title">
           <Sparkles size={17} />
           <strong>白話說明</strong>
-          {query.data && <span>{sourceLabels[query.data.source]}</span>}
+          {query.data && (
+            <span>
+              {sourceLabels[query.data.source]} · {query.data.model}
+            </span>
+          )}
         </div>
         {query.isPending ? (
           <p className="muted" role="status">
@@ -202,7 +156,6 @@ export function SuggestionPanel({
         ) : (
           <>
             <h3 className="suggestion-title">{query.data.title}</h3>
-            <p className="model-source">審核模型：{query.data.model}</p>
             <p className="explanation">{query.data.explanation}</p>
             {verifiedSuggestion ? (
               <div className="suggestion">
@@ -210,11 +163,11 @@ export function SuggestionPanel({
                 <ul className="suggestion-changes">
                   {verifiedSuggestion.changes.map((change) => (
                     <li
-                      key={`${change.fileId ?? ""}:${change.row}:${change.column}`}
+                      key={`${change.fileId ?? ""}:${change.rowId}:${change.column}`}
                     >
                       <span>
-                        {fileLabel(change.fileId)
-                          ? `${fileLabel(change.fileId)} · `
+                        {change.datasetType
+                          ? `${datasetLabels[change.datasetType] ?? change.datasetType} · `
                           : ""}
                         {change.rowId} ·{" "}
                         {fieldNames[change.column] ?? change.column}
@@ -236,7 +189,7 @@ export function SuggestionPanel({
                         verifiedSuggestion.changes
                           .map(
                             (change) =>
-                              `${fileLabel(change.fileId) ?? ""} ${change.rowId} ${fieldNames[change.column] ?? change.column}: ${formatValue(change.value)}`,
+                              `${change.rowId} ${fieldNames[change.column] ?? change.column}: ${formatValue(change.value)}`,
                           )
                           .join("\n"),
                       );
@@ -277,15 +230,6 @@ export function SuggestionPanel({
                 說明中有無法由資料或手冊佐證的數字，已改用固定說明。
               </p>
             )}
-            {query.data.source !== "ai" && (
-              <button
-                className="secondary"
-                disabled={query.isFetching}
-                onClick={() => query.refetch()}
-              >
-                {query.isFetching ? "重新取得中…" : "重試 AI 說明"}
-              </button>
-            )}
             {query.data.citations.length > 0 && (
               <section className="suggestion-citations" aria-label="手冊依據">
                 <strong>手冊依據</strong>
@@ -296,12 +240,6 @@ export function SuggestionPanel({
                       {citation.section.length > 0 && (
                         <small>{citation.section.join(" › ")}</small>
                       )}
-                      {citation.page !== null &&
-                        citation.page !== undefined && (
-                          <small>
-                            第 {citation.page} 頁 · {citation.id}
-                          </small>
-                        )}
                     </li>
                   ))}
                 </ul>

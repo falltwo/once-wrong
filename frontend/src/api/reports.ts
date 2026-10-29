@@ -1,6 +1,12 @@
-// Copy to frontend/src/api/reports.ts on frontend PR #1, then apply frontend-pr1.patch.
 // This adapter always uses the backend. It never reads localStorage or falls back to mocks.
-import type { Evaluation, Issue, Report, Suggestion, Version } from "../types";
+import type {
+  BackendHealth,
+  Evaluation,
+  Issue,
+  Report,
+  Suggestion,
+  Version,
+} from "../types";
 
 const env = (
   import.meta as ImportMeta & {
@@ -11,7 +17,7 @@ const configuredBase = env?.VITE_API_BASE_URL;
 const API_BASE = (
   typeof configuredBase === "string" && configuredBase.trim()
     ? configuredBase.trim()
-    : "http://127.0.0.1:8000"
+    : "/api"
 ).replace(/\/+$/, "");
 
 function errorMessage(body: unknown, fallback: string): string {
@@ -78,6 +84,12 @@ export function download(
 }
 
 export const reportsApi = {
+  health(): Promise<BackendHealth> {
+    return request<BackendHealth>("/health");
+  },
+  evaluationLatest(): Promise<Evaluation> {
+    return request<Evaluation>("/evaluations/latest", { cache: "no-store" });
+  },
   list(): Promise<Report[]> {
     return request<Report[]>("/reports");
   },
@@ -91,8 +103,8 @@ export const reportsApi = {
   ): Promise<Version> {
     const form = new FormData();
     const files = Array.isArray(file) ? file : [file];
-    for (const selected of files)
-      form.append(bundle || files.length > 1 ? "files" : "file", selected);
+    const fieldName = bundle || files.length > 1 ? "files" : "file";
+    for (const selected of files) form.append(fieldName, selected);
     // The browser sets the multipart boundary. The server parses and validates the file.
     return request<Version>(
       `/reports/${encodeURIComponent(reportId)}/versions`,
@@ -112,15 +124,15 @@ export const reportsApi = {
     form.append("name", name);
     form.append("period", period);
     const files = Array.isArray(file) ? file : [file];
-    for (const selected of files)
-      form.append(bundle || files.length > 1 ? "files" : "file", selected);
+    const fieldName = bundle || files.length > 1 ? "files" : "file";
+    for (const selected of files) form.append(fieldName, selected);
     return request<Report>("/reports", { method: "POST", body: form });
   },
-  evaluation(): Promise<Evaluation> {
-    return request<Evaluation>("/evaluations/latest", { cache: "no-store" });
-  },
   sourceUrl(versionId: string, fileId?: string): string {
-    return `${API_BASE}/versions/${encodeURIComponent(versionId)}/${fileId ? `files/${encodeURIComponent(fileId)}/` : ""}source`;
+    const sourcePath = fileId
+      ? `/versions/${encodeURIComponent(versionId)}/files/${encodeURIComponent(fileId)}/source`
+      : `/versions/${encodeURIComponent(versionId)}/source`;
+    return `${API_BASE}${sourcePath}`;
   },
   suggestion(issue: Issue, versionId: string): Promise<Suggestion> {
     return request<Suggestion>(

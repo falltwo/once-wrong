@@ -22,13 +22,15 @@ export function CreateReportDialog({ onClose }: { onClose: () => void }) {
       navigate(`/reports/${report.id}`);
     },
   });
-  const choose = (selected: File[]) => {
+  const choose = (selected: FileList | File[] | undefined) => {
     if (!mutation.isPending) {
-      setFiles(selected);
-      if (selected.length > 1) setBundle(true);
+      const selectedFiles = selected ? Array.from(selected) : [];
+      setFiles(selectedFiles);
+      if (selectedFiles.length > 1) setBundle(true);
       mutation.reset();
     }
   };
+  const fileNames = files.map((selected) => selected.name).join("、");
 
   return (
     <Dialog
@@ -37,14 +39,15 @@ export function CreateReportDialog({ onClose }: { onClose: () => void }) {
       busy={mutation.isPending}
     >
       <p className="muted">
-        輸入報表名稱與月份，再上傳 CSV。檢核成功後會建立第 1 版。
+        輸入報表名稱與月份，再上傳 CSV。後端會依表頭辨識資料格式，並建立第 1
+        版。
       </p>
       <div className="new-report-fields">
         <label>
           報表名稱
           <input
             value={name}
-            maxLength={200}
+            maxLength={120}
             placeholder="例如：準備金月報"
             disabled={mutation.isPending}
             onChange={(event) => setName(event.target.value)}
@@ -73,16 +76,16 @@ export function CreateReportDialog({ onClose }: { onClose: () => void }) {
         onDrop={(event) => {
           event.preventDefault();
           setDragging(false);
-          choose(Array.from(event.dataTransfer.files));
+          choose(event.dataTransfer.files);
         }}
       >
         <Upload size={28} />
-        <strong>
+        <strong>{fileNames || "點擊選擇，或拖曳 CSV 到這裡"}</strong>
+        <span>
           {files.length
-            ? files.map((file) => file.name).join("、")
-            : "點擊選擇，或拖曳 CSV 到這裡"}
-        </strong>
-        <span>可選多份 CSV · UTF-8 · 每檔最大 2 MiB、1,000 筆</span>
+            ? `${files.length} 個檔案`
+            : "CSV UTF-8 · 每檔最大 2 MB · 最多 1,000 筆"}
+        </span>
       </button>
       <input
         ref={input}
@@ -91,22 +94,33 @@ export function CreateReportDialog({ onClose }: { onClose: () => void }) {
         multiple
         hidden
         disabled={mutation.isPending}
-        onChange={(event) => choose(Array.from(event.target.files ?? []))}
+        onChange={(event) => choose(event.target.files ?? undefined)}
       />
-      <label className="filing-choice">
+      <div className="muted">
+        <p>支援單檔 demo／壽險承保，也可一次選同次申報的多個 CSV：</p>
+        <p>
+          <code>id, product, previous, opening</code>
+        </p>
+        <p>
+          <code>
+            公司代號, 保單編號, 保單編號序號, 異動序號, 加保別, 加保日期,
+            退保別, 退保日期
+          </code>
+        </p>
+        <p>
+          多檔申報使用承保、給付、填報對象
+          CSV；每種檔案最多一份。壽險欄位保留文字與前置 0。
+        </p>
+      </div>
+      <label className="checkbox-row">
         <input
           type="checkbox"
           checked={bundle}
-          disabled={files.length > 1 || mutation.isPending}
+          disabled={mutation.isPending}
           onChange={(event) => setBundle(event.target.checked)}
         />
-        以同次申報的多檔版本檢核
+        這些檔案組成同一次申報（使用多檔版本）
       </label>
-      <p className="muted">
-        {bundle
-          ? "每次提交完整的承保、給付與填報對象檔組；缺少必要檔案時不能確認。"
-          : "支援四欄示範 CSV 或八欄壽險承保 CSV；原始文字與前置零會保留。"}
-      </p>
       <div className="sample-links">
         <a href="/sample-errors.csv" download>
           含錯誤範例

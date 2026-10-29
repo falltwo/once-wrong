@@ -16,8 +16,8 @@ async function loadSource(relative) {
   );
 }
 
-const { issueTouchesRow, repeatState, stateLabel, rowValues } =
-  await loadSource("../src/utils/issues.ts");
+const { issueAffectsRow, issueStatus, statusLabel, rowValues } =
+  await loadSource("../src/utils/reportData.ts");
 const { evaluationMetrics } = await loadSource("../src/utils/evaluation.ts");
 
 test("live evaluation keeps failures in the full denominator and labels conditional rates", () => {
@@ -74,19 +74,19 @@ test("multi-file findings do not attach to the other file's same row number", ()
   const finding = {
     cells: [{ row: 1, rowId: "uw:1", fileId: "uw", column: "公司代號" }],
   };
-  assert.equal(issueTouchesRow(finding, underwriting), true);
-  assert.equal(issueTouchesRow(finding, claim), false);
+  assert.equal(issueAffectsRow(finding, underwriting), true);
+  assert.equal(issueAffectsRow(finding, claim), false);
 });
 
 test("a multi-record finding stays visible on every affected row", () => {
   const finding = { cells: [{ rowId: "1" }, { rowId: "2" }] };
-  assert.equal(issueTouchesRow(finding, { id: "2", row: 2, values: {} }), true);
+  assert.equal(issueAffectsRow(finding, { id: "2", row: 2, values: {} }), true);
   assert.equal(
-    issueTouchesRow(finding, { id: "3", row: 3, values: {} }),
+    issueAffectsRow(finding, { id: "3", row: 3, values: {} }),
     false,
   );
   assert.equal(
-    issueTouchesRow(
+    issueAffectsRow(
       { rowId: "A" },
       { id: "A", product: "P", previous: 1, opening: 1 },
     ),
@@ -96,10 +96,10 @@ test("a multi-record finding stays visible on every affected row", () => {
 
 test("regressed is shown independently of the old repeated boolean", () => {
   const finding = { repeated: false, repeatStatus: "regressed" };
-  assert.equal(repeatState(finding), "regressed");
-  assert.equal(stateLabel(finding), "修好後復發");
-  assert.equal(repeatState({ repeated: true }), "repeated");
-  assert.equal(repeatState({ repeated: false }), "new");
+  assert.equal(issueStatus(finding), "regressed");
+  assert.equal(statusLabel(issueStatus(finding)), "修正後復發");
+  assert.equal(issueStatus({ repeated: true }), "repeated");
+  assert.equal(issueStatus({ repeated: false }), "new");
 });
 
 test("generic row values preserve leading zeroes and whitespace", () => {
@@ -134,7 +134,7 @@ test("uploads distinguish legacy file from complete filing files and preserve er
   assert.match(requests[1].url, /reports\/report%20id\/versions$/);
   await reportsApi.upload("R", [underwriting], true);
   assert.equal(requests[2].init.body.getAll("files").length, 1);
-  await reportsApi.evaluation();
+  await reportsApi.evaluationLatest();
   assert.equal(requests[3].init.cache, "no-store");
   assert.match(
     reportsApi.sourceUrl("version id", "file id"),
