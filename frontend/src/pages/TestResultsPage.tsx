@@ -19,7 +19,7 @@ function MetricCard({
   metric,
 }: {
   title: string;
-  metric: EvaluationMetric;
+  metric?: EvaluationMetric;
 }) {
   return (
     <article className="method-card">
@@ -30,12 +30,12 @@ function MetricCard({
       <div className="metric-row">
         <div>
           <span>比例</span>
-          <strong>{percent(metric.rate)}</strong>
+          <strong>{percent(metric?.rate ?? null)}</strong>
         </div>
         <div>
           <span>筆數</span>
           <strong className="rule-version">
-            {metric.count} / {metric.total}
+            {metric ? `${metric.count} / ${metric.total}` : "—"}
           </strong>
         </div>
       </div>
@@ -45,10 +45,12 @@ function MetricCard({
           <div className="bar-track">
             <div
               className="bar-fill precision-fill"
-              style={{ width: percent(metric.rate) }}
+              style={{
+                width: metric?.rate == null ? "0%" : percent(metric.rate),
+              }}
             />
           </div>
-          <b>{percent(metric.rate)}</b>
+          <b>{percent(metric?.rate ?? null)}</b>
         </div>
       </div>
     </article>
@@ -82,7 +84,10 @@ export function TestResultsPage() {
   if (overviewQuery.isError) {
     return (
       <main>
-        <ErrorState error={overviewQuery.error} retry={() => overviewQuery.refetch()} />
+        <ErrorState
+          error={overviewQuery.error}
+          retry={() => overviewQuery.refetch()}
+        />
       </main>
     );
   }
@@ -95,15 +100,18 @@ export function TestResultsPage() {
   const totals = latestReports.reduce(
     (result, { version }) => ({
       rows: result.rows + version.rows.length,
-      checks: result.checks + version.summary.totalChecks,
-      passed: result.passed + version.summary.passedChecks,
-      failed: result.failed + version.summary.failedChecks,
-      notEvaluated: result.notEvaluated + version.summary.notEvaluatedChecks,
+      checks: result.checks + (version.summary?.totalChecks ?? 0),
+      passed: result.passed + (version.summary?.passedChecks ?? 0),
+      failed: result.failed + (version.summary?.failedChecks ?? 0),
+      notEvaluated:
+        result.notEvaluated + (version.summary?.notEvaluatedChecks ?? 0),
     }),
     { rows: 0, checks: 0, passed: 0, failed: 0, notEvaluated: 0 },
   );
   const evaluation = evaluationQuery.data;
-  const generatedDate = evaluation
+  const dataset = evaluation?.dataset;
+  const byRule = evaluation?.byRule ?? [];
+  const generatedDate = evaluation?.generatedAt
     ? new Intl.DateTimeFormat("zh-TW", {
         dateStyle: "medium",
         timeStyle: "short",
@@ -125,7 +133,11 @@ export function TestResultsPage() {
         </span>
       </div>
 
-      <section className="prototype-warning" role="note" aria-label="評測資料說明">
+      <section
+        className="prototype-warning"
+        role="note"
+        aria-label="評測資料說明"
+      >
         <AlertTriangle size={20} />
         <div>
           <strong>
@@ -135,7 +147,7 @@ export function TestResultsPage() {
           </strong>
           <p>
             {evaluation
-              ? `評測使用程式產生的虛構${evaluation.dataset.product}資料與 ${evaluation.dataset.rules}，模型為 ${evaluation.model}；不能解讀為正式資料上的模型成績。`
+              ? `${evaluation.evaluationContext.displayNotice} 評測資料：${dataset?.product ?? "未提供資料類型"}，規則：${dataset?.rules ?? "未提供"}；不能解讀為正式資料上的模型成績。`
               : "請確認後端已設定 ONCE_WRONG_EVALUATION，並提供有效的評測 JSON。"}
           </p>
         </div>
@@ -144,7 +156,10 @@ export function TestResultsPage() {
       {evaluationQuery.isError && (
         <div className="neutral-notice" role="status">
           評測 API 暫不可用：{evaluationQuery.error.message}
-          <button className="text-button" onClick={() => evaluationQuery.refetch()}>
+          <button
+            className="text-button"
+            onClick={() => evaluationQuery.refetch()}
+          >
             重試
           </button>
         </div>
@@ -152,7 +167,10 @@ export function TestResultsPage() {
 
       {evaluation && (
         <>
-          <section className="benchmark-setup" aria-labelledby="evaluation-data-title">
+          <section
+            className="benchmark-setup"
+            aria-labelledby="evaluation-data-title"
+          >
             <div className="setup-title">
               <span>
                 <FlaskConical size={17} />
@@ -160,28 +178,42 @@ export function TestResultsPage() {
               <div>
                 <h2 id="evaluation-data-title">AI 評測資料</h2>
                 <p>
-                  {evaluation.model} · 產生於 {generatedDate} · {evaluation.dataset.rules}
+                  評測模型 {evaluation.evaluationContext.evaluatedModel} ·
+                  執行模型{" "}
+                  {evaluation.evaluationContext.runtimeModel || "未設定"} ·
+                  產生於 {generatedDate ?? "時間未提供"}
                 </p>
               </div>
             </div>
             <div className="setup-stats">
               <div>
                 <span>案例數</span>
-                <strong>{evaluation.dataset.cases}</strong>
+                <strong>{dataset?.cases ?? "—"}</strong>
               </div>
               <div>
                 <span>違規數</span>
-                <strong className="text-red">{evaluation.dataset.violations}</strong>
+                <strong className="text-red">
+                  {dataset?.violations ?? "—"}
+                </strong>
               </div>
               <div>
                 <span>測試輪次</span>
-                <strong>{evaluation.runs.length}</strong>
+                <strong>{evaluation.runs?.length ?? "—"}</strong>
               </div>
               <div>
                 <span>資料類型</span>
-                <strong className="setup-methods">{evaluation.dataset.product}</strong>
+                <strong className="setup-methods">
+                  {dataset?.product ?? "—"}
+                </strong>
               </div>
             </div>
+            <p className="evaluation-context-note">
+              {evaluation.evaluationContext.runtimeConfigured
+                ? evaluation.evaluationContext.modelMatchesRuntime
+                  ? "評測模型與目前執行模型相同。"
+                  : "評測模型與目前執行模型不同，請以模型欄位辨認這份快照。"
+                : "目前環境未設定執行模型；這份結果僅代表已保存的評測快照。"}
+            </p>
           </section>
 
           <div className="section-line evaluation-heading">
@@ -189,19 +221,31 @@ export function TestResultsPage() {
               <ChartNoAxesCombined size={18} />
               AI 審核表現
             </h2>
-            <span>以 {evaluation.dataset.violations} 筆違規為評測分母</span>
+            <span>以 {dataset?.violations ?? "—"} 筆違規為評測分母</span>
           </div>
           <section className="method-cards" aria-label="AI 審核評測指標">
-            <MetricCard title="正確處理違規" metric={evaluation.metrics.handledCorrectly} />
-            <MetricCard title="可推知時還原正確值" metric={evaluation.metrics.restoredWhenInferable} />
-            <MetricCard title="無法推知時不亂猜" metric={evaluation.metrics.heldBackWhenNotInferable} />
-            <MetricCard title="引用對應規則" metric={evaluation.metrics.citedRule} />
+            <MetricCard
+              title="正確處理違規"
+              metric={evaluation.metrics.handledCorrectly}
+            />
+            <MetricCard
+              title="可推知時還原正確值"
+              metric={evaluation.metrics.restoredWhenInferable}
+            />
+            <MetricCard
+              title="無法推知時不亂猜"
+              metric={evaluation.metrics.heldBackWhenNotInferable}
+            />
+            <MetricCard
+              title="引用對應規則"
+              metric={evaluation.metrics.citedRule}
+            />
           </section>
 
           <section className="confusion-section">
             <div className="section-line">
               <h2>各規則評測結果</h2>
-              <span>{evaluation.byRule.length} 條規則</span>
+              <span>{byRule.length} 條規則</span>
             </div>
             <div className="table-panel confusion-table-wrap">
               <div className="table-scroll">
@@ -217,14 +261,24 @@ export function TestResultsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {evaluation.byRule.map((rule) => (
+                    {byRule.map((rule) => (
                       <tr key={rule.ruleId}>
-                        <td><strong>{rule.ruleId}</strong></td>
+                        <td>
+                          <strong>{rule.ruleId}</strong>
+                        </td>
                         <td className="number">{rule.violations}</td>
-                        <td className="number">{percent(rule.handledCorrectly.rate)}</td>
-                        <td className="number">{percent(rule.restoredWhenInferable.rate)}</td>
-                        <td className="number">{percent(rule.heldBackWhenNotInferable.rate)}</td>
-                        <td className="number">{percent(rule.citedRule.rate)}</td>
+                        <td className="number">
+                          {percent(rule.handledCorrectly.rate)}
+                        </td>
+                        <td className="number">
+                          {percent(rule.restoredWhenInferable.rate)}
+                        </td>
+                        <td className="number">
+                          {percent(rule.heldBackWhenNotInferable.rate)}
+                        </td>
+                        <td className="number">
+                          {percent(rule.citedRule.rate)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -233,7 +287,8 @@ export function TestResultsPage() {
             </div>
             <p className="matrix-note">
               <CircleHelp size={14} />
-              後端沒有提供 ground truth 的規則抓錯 TP / FP / FN，因此此頁不計算 Precision、Recall 或 Accuracy。
+              後端沒有提供 ground truth 的規則抓錯 TP / FP / FN，因此此頁不計算
+              Precision、Recall 或 Accuracy。
             </p>
           </section>
         </>
@@ -248,10 +303,24 @@ export function TestResultsPage() {
       </div>
       <section className="benchmark-setup">
         <div className="setup-stats">
-          <div><span>報表數</span><strong>{latestReports.length}</strong></div>
-          <div><span>資料筆數</span><strong>{totals.rows}</strong></div>
-          <div><span>規則檢查</span><strong>{totals.checks}</strong></div>
-          <div><span>未通過 / 通過 / 未評估</span><strong>{totals.failed} / {totals.passed} / {totals.notEvaluated}</strong></div>
+          <div>
+            <span>報表數</span>
+            <strong>{latestReports.length}</strong>
+          </div>
+          <div>
+            <span>資料筆數</span>
+            <strong>{totals.rows}</strong>
+          </div>
+          <div>
+            <span>規則檢查</span>
+            <strong>{totals.checks}</strong>
+          </div>
+          <div>
+            <span>未通過 / 通過 / 未評估</span>
+            <strong>
+              {totals.failed} / {totals.passed} / {totals.notEvaluated}
+            </strong>
+          </div>
         </div>
       </section>
       <div className="section-line">
@@ -275,12 +344,20 @@ export function TestResultsPage() {
               <tbody>
                 {latestReports.map(({ report, version }) => (
                   <tr key={report.id}>
-                    <td><Link to={`/reports/${report.id}`}><strong>{report.name}</strong></Link></td>
+                    <td>
+                      <Link to={`/reports/${report.id}`}>
+                        <strong>{report.name}</strong>
+                      </Link>
+                    </td>
                     <td>{report.period}</td>
                     <td className="number">第 {version.number} 版</td>
                     <td className="number">{version.rows.length}</td>
-                    <td className="number">{version.summary.totalChecks}</td>
-                    <td className="number">{version.summary.failedChecks}</td>
+                    <td className="number">
+                      {version.summary?.totalChecks ?? "—"}
+                    </td>
+                    <td className="number">
+                      {version.summary?.failedChecks ?? "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -292,7 +369,9 @@ export function TestResultsPage() {
       )}
       <section className="next-metrics">
         <div>
-          <div className="next-metrics-icon"><CircleHelp size={18} /></div>
+          <div className="next-metrics-icon">
+            <CircleHelp size={18} />
+          </div>
           <div>
             <h2>規則抓錯 Precision / Recall</h2>
             <p>需要後端提供固定測試集的人工標註答案與各規則預測結果。</p>

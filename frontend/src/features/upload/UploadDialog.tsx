@@ -14,12 +14,15 @@ export function UploadDialog({
   onClose: () => void;
   onUploaded: (id: string) => void;
 }) {
-  const [file, setFile] = useState<File>();
+  const [files, setFiles] = useState<File[]>([]);
+  const [bundle, setBundle] = useState(
+    Boolean(report.versions.at(-1)?.files?.length),
+  );
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const client = useQueryClient();
   const mutation = useMutation({
-    mutationFn: (selected: File) => reportsApi.upload(report.id, selected),
+    mutationFn: () => reportsApi.upload(report.id, files, bundle),
     onSuccess: async (version) => {
       await Promise.all([
         client.invalidateQueries({ queryKey: ["report", report.id] }),
@@ -28,12 +31,15 @@ export function UploadDialog({
       onUploaded(version.id);
     },
   });
-  const choose = (selected?: File) => {
+  const choose = (selected: FileList | File[] | undefined) => {
     if (!mutation.isPending) {
-      setFile(selected);
+      const selectedFiles = selected ? Array.from(selected) : [];
+      setFiles(selectedFiles);
+      if (selectedFiles.length > 1) setBundle(true);
       mutation.reset();
     }
   };
+  const fileNames = files.map((selected) => selected.name).join("、");
   return (
     <Dialog title="上傳修正版" onClose={onClose} busy={mutation.isPending}>
       <p className="muted">
@@ -51,27 +57,48 @@ export function UploadDialog({
         onDrop={(e) => {
           e.preventDefault();
           setDragging(false);
-          choose(e.dataTransfer.files[0]);
+          choose(e.dataTransfer.files);
         }}
       >
         <Upload size={30} />
-        <strong>{file?.name ?? "點擊選擇，或拖曳 CSV 到這裡"}</strong>
-        <span>CSV UTF-8 · 最大 2 MB · 最多 1,000 筆</span>
+        <strong>{fileNames || "點擊選擇，或拖曳 CSV 到這裡"}</strong>
+        <span>
+          {files.length
+            ? `${files.length} 個檔案`
+            : "CSV UTF-8 · 每檔最大 2 MB · 最多 1,000 筆"}
+        </span>
       </button>
       <input
         ref={input}
         type="file"
         accept=".csv,text/csv"
+        multiple
         hidden
         disabled={mutation.isPending}
-        onChange={(e) => choose(e.target.files?.[0])}
+        onChange={(e) => choose(e.target.files ?? undefined)}
       />
       <div className="muted">
-        <p>請上傳與此報表相同格式的 CSV，後端會依表頭辨識 profile。</p>
-        <p><code>demo_csv_v1</code>：<code>id, product, previous, opening</code></p>
-        <p><code>life_underwriting_v1</code>：公司代號、保單編號、保單編號序號、異動序號、加保別、加保日期、退保別、退保日期（欄位順序可不同）</p>
-        <p>CSV 上限 2 MB、最多 1,000 筆；壽險版本的重複錯誤目前依資料列位置比較。</p>
+        <p>
+          建立第 {report.versions.at(-1)!.number + 1}{" "}
+          版時，請重新選擇此版本要包含的完整檔案組。
+        </p>
+        <p>
+          單檔支援 demo 或 8 欄壽險承保；同次申報可提供承保、給付、填報對象
+          CSV，每種類型最多一份。
+        </p>
+        <p>
+          每檔上限 2 MB、最多 1,000 筆；後端依表頭辨識檔案類型並追蹤各檔來源。
+        </p>
       </div>
+      <label className="checkbox-row">
+        <input
+          type="checkbox"
+          checked={bundle}
+          disabled={mutation.isPending}
+          onChange={(event) => setBundle(event.target.checked)}
+        />
+        這些檔案組成同一次申報（完整取代上一版檔案組）
+      </label>
       <div className="sample-links">
         <a href="/sample-errors.csv" download>
           含錯誤範例
@@ -95,8 +122,8 @@ export function UploadDialog({
         </button>
         <button
           className="primary"
-          disabled={!file || mutation.isPending}
-          onClick={() => file && mutation.mutate(file)}
+          disabled={!files.length || mutation.isPending}
+          onClick={() => files.length && mutation.mutate()}
         >
           {mutation.isPending ? (
             <>

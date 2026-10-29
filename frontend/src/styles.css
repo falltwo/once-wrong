@@ -520,6 +520,9 @@ main {
   gap: 10px;
   flex-wrap: wrap;
 }
+.source-download {
+  text-decoration: none;
+}
 .tabs {
   display: flex;
   gap: 4px;
@@ -628,6 +631,10 @@ td {
 .status.warning {
   color: #ad9051;
   background: #f8f2e4;
+}
+.status.regressed {
+  color: #8f5c9d;
+  background: #f4ecf6;
 }
 .issue-button {
   border: 1px solid transparent;
@@ -972,6 +979,39 @@ td {
 .record-issue > .status {
   margin-left: auto;
 }
+.record-files {
+  padding-left: 18px;
+  color: #77826f;
+  font-size: 12px;
+}
+.record-files li {
+  margin: 7px 0;
+}
+.record-files a {
+  margin-left: 10px;
+  color: #56734b;
+}
+.issue-history {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0 14px;
+  color: #87917f;
+  font-size: 11px;
+}
+.issue-history a {
+  color: #56734b;
+}
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  color: #6f7d66;
+  font-size: 12px;
+}
+.checkbox-row input {
+  accent-color: #547148;
+}
 .benchmark-badge {
   display: inline-flex;
   align-items: center;
@@ -1045,6 +1085,11 @@ td {
   display: grid;
   grid-template-columns: repeat(4, minmax(85px, 1fr));
   gap: 20px;
+}
+.evaluation-context-note {
+  margin: 12px 20px 0;
+  color: #798472;
+  font-size: 11px;
 }
 .setup-stats > div > span,
 .metric-row > div > span {

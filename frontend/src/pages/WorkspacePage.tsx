@@ -27,11 +27,15 @@ import { exportReport } from "../utils/exportReport";
 import { date, money } from "../utils/format";
 import {
   formatCell,
+  fileLabel,
   issueAffectsCell,
   issueAffectsRow,
+  issueStatus,
   lifeFieldLabels,
   rowLabel,
   rowValues,
+  statusClass,
+  statusLabel,
 } from "../utils/reportData";
 import type { Report } from "../types";
 
@@ -66,17 +70,27 @@ export function Workspace({ report }: { report: Report }) {
   const version =
     report.versions.find((v) => v.id === params.get("version")) ?? latest;
   const filter = params.get("filter") ?? "all";
+  const fileScope = params.get("file") ?? "all";
+  const files = version.files ?? [];
   const selected = params.has("issue")
     ? version.issues.find((i) => i.id === params.get("issue"))
     : version.issues[0];
-  const repeated = version.issues.filter((i) => i.repeated).length;
+  const repeated = version.issues.filter(
+    (i) => issueStatus(i) === "repeated",
+  ).length;
+  const regressed = version.issues.filter(
+    (i) => issueStatus(i) === "regressed",
+  ).length;
+  const notEvaluated = version.summary?.notEvaluatedChecks ?? 0;
   const submitted = report.submittedVersionId === version.id;
   const completed = version.validationStatus === "completed";
   const canSubmit =
     report.canSubmit === true &&
     completed &&
     version.id === latest.id &&
-    !submitted;
+    !submitted &&
+    version.issues.length === 0 &&
+    notEvaluated === 0;
   const updateParams = (values: Record<string, string>) =>
     setParams((old) => {
       const next = new URLSearchParams(old);
@@ -90,17 +104,39 @@ export function Workspace({ report }: { report: Report }) {
       setConfirm(false);
     },
   });
-  const visibleRows = version.rows.filter((row) => {
-    const issues = version.issues.filter((issue) => issueAffectsRow(issue, row));
-    const searchable = `${row.id} ${row.row ?? ""} ${Object.values(rowValues(row)).join(" ")}`;
+  const scopedRows = version.rows.filter((row) => {
+    if (fileScope === "all" || !files.length) return true;
+    const file = files.find((candidate) =>
+      row.id.startsWith(`${candidate.id}:`),
+    );
+    return (
+      ("fileId" in row ? row.fileId : undefined) === fileScope ||
+      file?.id === fileScope
+    );
+  });
+  const visibleRows = scopedRows.filter((row) => {
+    const issues = version.issues.filter((issue) =>
+      issueAffectsRow(issue, row),
+    );
+    const searchable = `${row.id} ${"row" in row ? row.row : ""} ${Object.values(rowValues(row)).join(" ")}`;
     return (
       (filter === "all" ||
         (filter === "errors" && issues.length) ||
-        (filter === "repeated" && issues.some((i) => i.repeated))) &&
+        (filter === "repeated" &&
+          issues.some((i) => issueStatus(i) === "repeated")) ||
+        (filter === "regressed" &&
+          issues.some((i) => issueStatus(i) === "regressed"))) &&
       searchable.toLowerCase().includes(search.toLowerCase())
     );
   });
-  const columns = version.columns ?? ["product", "previous", "opening"];
+  const columns =
+    fileScope !== "all" && files.length
+      ? (files.find((file) => file.id === fileScope)?.columns ??
+        version.columns ??
+        [])
+      : files.length
+        ? [...new Set(files.flatMap((file) => file.columns))]
+        : (version.columns ?? ["product", "previous", "opening"]);
   const isLifeProfile = version.schemaProfileId === "life_underwriting_v1";
   return (
     <main className="workspace">
@@ -180,10 +216,10 @@ export function Workspace({ report }: { report: Report }) {
         </div>
       </section>
       <div
-        className={`notice ${!completed || version.issues.length ? "blocked" : "passed"}`}
+        className={`notice ${!completed || version.issues.length || notEvaluated ? "blocked" : "passed"}`}
         role="status"
       >
-        {!completed || version.issues.length ? (
+        {!completed || version.issues.length || notEvaluated ? (
           <LockKeyhole size={20} />
         ) : (
           <CircleCheck size={20} />
@@ -196,9 +232,11 @@ export function Workspace({ report }: { report: Report }) {
                 ? "正在檢視歷史版本"
                 : !completed
                   ? "檢核結果尚未就緒"
-                  : version.issues.length
-                    ? "送出已鎖定，請先完成修正"
-                    : "所有示範檢核已通過"}
+                  : notEvaluated
+                    ? "部分檢核未執行，不能視為全數通過"
+                    : version.issues.length
+                      ? "送出已鎖定，請先完成修正"
+                      : "所有示範檢核已通過"}
           </strong>
           <p>
             {version.id !== latest.id
@@ -207,11 +245,15 @@ export function Workspace({ report }: { report: Report }) {
                 ? "確認紀錄已保存在後端，未送往外部申報系統。"
                 : !completed
                   ? "請等待後端完成檢核；目前不能確認送出。"
-                  : repeated
-                    ? `有 ${repeated} 項錯誤在前後兩版都未通過，請依檢核說明核對來源資料。`
-                    : version.issues.length
-                      ? "修改資料並重新上傳，系統會再次檢查。"
-                      : "請完成最後人工確認，再記錄內部確認狀態。"}
+                  : notEvaluated
+                    ? `有 ${notEvaluated} 項檢核未執行：${version.evidence?.notEvaluated?.map((item) => item.reason).join("；") || "請依後端檢核說明補齊資料或格式"}。`
+                    : repeated
+                      ? `有 ${repeated} 項錯誤在前後兩版都未通過，請依檢核說明核對來源資料。`
+                      : regressed
+                        ? `有 ${regressed} 項錯誤在修正後再次出現，請重新核對來源資料。`
+                        : version.issues.length
+                          ? "修改資料並重新上傳，系統會再次檢查。"
+                          : "請完成最後人工確認，再記錄內部確認狀態。"}
           </p>
         </div>
         <ShieldCheck className="notice-decoration" size={30} />
@@ -228,7 +270,11 @@ export function Workspace({ report }: { report: Report }) {
               aria-label="選擇報表版本"
               value={version.id}
               onChange={(e) =>
-                updateParams({ version: e.target.value, issue: "" })
+                updateParams({
+                  version: e.target.value,
+                  issue: "",
+                  file: "all",
+                })
               }
             >
               {[...report.versions].reverse().map((v) => (
@@ -238,6 +284,36 @@ export function Workspace({ report }: { report: Report }) {
               ))}
             </select>
           </label>
+          {files.length > 0 && (
+            <label className="version-select">
+              <FileSpreadsheet size={15} />
+              <select
+                aria-label="選擇檔案"
+                value={fileScope}
+                onChange={(event) => updateParams({ file: event.target.value })}
+              >
+                <option value="all">全部檔案</option>
+                {files.map((file) => (
+                  <option key={file.id} value={file.id}>
+                    {fileLabel(file)} · {file.filename}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {(fileScope !== "all" || files.length === 0) && (
+            <a
+              className="secondary compact source-download"
+              href={reportsApi.sourceUrl(
+                version.id,
+                fileScope === "all" ? undefined : fileScope,
+              )}
+              download
+            >
+              <ArrowDownToLine size={15} />
+              下載來源檔
+            </a>
+          )}
           <button
             className="secondary compact"
             onClick={() => exportReport(report, version)}
@@ -255,6 +331,7 @@ export function Workspace({ report }: { report: Report }) {
                 ["all", "全部資料"],
                 ["errors", "僅看錯誤"],
                 ["repeated", "重複錯誤"],
+                ["regressed", "修正後復發"],
               ].map(([value, label]) => (
                 <button
                   key={value}
@@ -264,6 +341,8 @@ export function Workspace({ report }: { report: Report }) {
                 >
                   {label}
                   {value === "errors" && <span>{version.issues.length}</span>}
+                  {value === "repeated" && <span>{repeated}</span>}
+                  {value === "regressed" && <span>{regressed}</span>}
                 </button>
               ))}
             </div>
@@ -285,11 +364,12 @@ export function Workspace({ report }: { report: Report }) {
                   {columns.map((column) => (
                     <th key={column}>
                       {lifeFieldLabels[column] ??
-                        ({
+                        {
                           product: "險種",
                           previous: "上月期末",
                           opening: "本月期初",
-                        }[column] ?? column)}
+                        }[column] ??
+                        column}
                     </th>
                   ))}
                   <th>檢核狀態</th>
@@ -297,8 +377,8 @@ export function Workspace({ report }: { report: Report }) {
               </thead>
               <tbody>
                 {visibleRows.map((row) => {
-                  const issues = version.issues.filter(
-                    (issue) => issueAffectsRow(issue, row),
+                  const issues = version.issues.filter((issue) =>
+                    issueAffectsRow(issue, row),
                   );
                   const values = rowValues(row);
                   const issue = issues[0];
@@ -306,7 +386,9 @@ export function Workspace({ report }: { report: Report }) {
                     <tr
                       key={row.id}
                       className={
-                        selected && issueAffectsRow(selected, row) ? "selected-row" : ""
+                        selected && issueAffectsRow(selected, row)
+                          ? "selected-row"
+                          : ""
                       }
                     >
                       <td className="row-id">{rowLabel(row)}</td>
@@ -324,7 +406,9 @@ export function Workspace({ report }: { report: Report }) {
                             key={column}
                             className={`${isAmount ? "number" : ""} ${invalid ? "invalid-cell" : ""}`}
                           >
-                            {isAmount ? money(value as number) : formatCell(value)}
+                            {isAmount
+                              ? money(value as number)
+                              : formatCell(value)}
                           </td>
                         );
                       })}
@@ -334,16 +418,16 @@ export function Workspace({ report }: { report: Report }) {
                             {issues.map((i) => (
                               <button
                                 key={i.id}
-                                className={`status issue-button ${i.repeated ? "bad" : "warning"}`}
+                                className={`status issue-button ${statusClass(issueStatus(i))}`}
                                 onClick={() => updateParams({ issue: i.id })}
                                 aria-label={`查看 ${row.id} ${i.ruleId} 錯誤`}
                               >
-                                {i.repeated ? (
+                                {issueStatus(i) !== "new" ? (
                                   <RotateCcw size={12} />
                                 ) : (
                                   <AlertCircle size={12} />
                                 )}
-                                {i.repeated ? "重複錯誤" : "待修正"}
+                                {statusLabel(issueStatus(i))}
                                 {issues.length > 1 && ` ${i.ruleId}`}
                               </button>
                             ))}
@@ -378,7 +462,7 @@ export function Workspace({ report }: { report: Report }) {
           </div>
           <div className="table-footer">
             <span>
-              顯示 {visibleRows.length} / {version.rows.length} 筆資料
+              顯示 {visibleRows.length} / {scopedRows.length} 筆資料
             </span>
             <span>金額單位：新臺幣元</span>
           </div>
@@ -392,6 +476,7 @@ export function Workspace({ report }: { report: Report }) {
             key={`${version.id}:${selected.id}`}
             issue={selected}
             versionId={version.id}
+            report={report}
             onClose={() => updateParams({ issue: "" })}
           />
         )}

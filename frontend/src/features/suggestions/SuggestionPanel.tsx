@@ -1,13 +1,18 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { Search, ShieldCheck, Sparkles, X } from "lucide-react";
 import { reportsApi } from "../../api/reports";
-import type { Issue } from "../../types";
+import type { Issue, Report } from "../../types";
 import {
   formatCell,
+  datasetLabels,
   issueFacts,
   issueLocation,
   lifeFieldLabels,
+  issueStatus,
+  statusClass,
+  statusLabel,
 } from "../../utils/reportData";
 
 const fieldNames: Record<string, string> = {
@@ -29,10 +34,12 @@ const sourceLabels = {
 export function SuggestionPanel({
   issue,
   versionId,
+  report,
   onClose,
 }: {
   issue: Issue;
   versionId: string;
+  report: Report;
   onClose: () => void;
 }) {
   const query = useQuery({
@@ -64,14 +71,50 @@ export function SuggestionPanel({
       <div className="panel-body">
         <div className="issue-tags">
           <span className="rule-tag">{issue.ruleId}</span>
-          <span className={`status ${issue.repeated ? "bad" : "warning"}`}>
-            {issue.repeated ? "重複錯誤" : "待修正"}
+          <span className={`status ${statusClass(issueStatus(issue))}`}>
+            {statusLabel(issueStatus(issue))}
           </span>
         </div>
         <h2>{issue.title}</h2>
         <p className="muted">
           {issueLocation(issue)} · {issue.ruleId}
         </p>
+        {(issue.firstSeenNumber ||
+          issue.prevSeenNumber ||
+          issue.fixedInNumber) && (
+          <div className="issue-history" aria-label="錯誤版本歷程">
+            {issue.firstSeenNumber && (
+              <span>
+                首次出現：
+                <Link
+                  to={`/reports/${report.id}?version=${report.versions.find((v) => v.number === issue.firstSeenNumber)?.id ?? versionId}`}
+                >
+                  第 {issue.firstSeenNumber} 版
+                </Link>
+              </span>
+            )}
+            {issue.prevSeenNumber && (
+              <span>
+                上次出現：
+                <Link
+                  to={`/reports/${report.id}?version=${report.versions.find((v) => v.number === issue.prevSeenNumber)?.id ?? versionId}`}
+                >
+                  第 {issue.prevSeenNumber} 版
+                </Link>
+              </span>
+            )}
+            {issue.fixedInNumber && (
+              <span>
+                曾修正：
+                <Link
+                  to={`/reports/${report.id}?version=${report.versions.find((v) => v.number === issue.fixedInNumber)?.id ?? versionId}`}
+                >
+                  第 {issue.fixedInNumber} 版
+                </Link>
+              </span>
+            )}
+          </div>
+        )}
         <div className="comparison">
           {issueFacts(issue).map(([field, value]) => (
             <div key={field}>
@@ -119,9 +162,15 @@ export function SuggestionPanel({
                 <span className="eyebrow">建議修正</span>
                 <ul className="suggestion-changes">
                   {verifiedSuggestion.changes.map((change) => (
-                    <li key={`${change.row}:${change.column}`}>
+                    <li
+                      key={`${change.fileId ?? ""}:${change.rowId}:${change.column}`}
+                    >
                       <span>
-                        {change.rowId} · {fieldNames[change.column] ?? change.column}
+                        {change.datasetType
+                          ? `${datasetLabels[change.datasetType] ?? change.datasetType} · `
+                          : ""}
+                        {change.rowId} ·{" "}
+                        {fieldNames[change.column] ?? change.column}
                       </span>
                       <strong>{formatValue(change.value)}</strong>
                     </li>
@@ -166,7 +215,9 @@ export function SuggestionPanel({
             )}
             {query.data.rejectedSuggestions.length > 0 && (
               <div className="rejected-suggestions">
-                <strong>有 {query.data.rejectedSuggestions.length} 個修法未通過重驗</strong>
+                <strong>
+                  有 {query.data.rejectedSuggestions.length} 個修法未通過重驗
+                </strong>
                 <ul>
                   {query.data.rejectedSuggestions.map((reason, index) => (
                     <li key={`${index}:${reason}`}>{reason}</li>

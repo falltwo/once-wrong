@@ -1,8 +1,7 @@
-// Copy to frontend/src/api/reports.ts on frontend PR #1, then apply frontend-pr1.patch.
 // This adapter always uses the backend. It never reads localStorage or falls back to mocks.
 import type {
-  AIEvaluation,
   BackendHealth,
+  Evaluation,
   Issue,
   Report,
   Suggestion,
@@ -88,8 +87,8 @@ export const reportsApi = {
   health(): Promise<BackendHealth> {
     return request<BackendHealth>("/health");
   },
-  evaluationLatest(): Promise<AIEvaluation> {
-    return request<AIEvaluation>("/evaluations/latest");
+  evaluationLatest(): Promise<Evaluation> {
+    return request<Evaluation>("/evaluations/latest", { cache: "no-store" });
   },
   list(): Promise<Report[]> {
     return request<Report[]>("/reports");
@@ -97,9 +96,15 @@ export const reportsApi = {
   get(id: string): Promise<Report> {
     return request<Report>(`/reports/${encodeURIComponent(id)}`);
   },
-  upload(reportId: string, file: File): Promise<Version> {
+  upload(
+    reportId: string,
+    file: File | File[],
+    bundle = false,
+  ): Promise<Version> {
     const form = new FormData();
-    form.append("file", file);
+    const files = Array.isArray(file) ? file : [file];
+    const fieldName = bundle || files.length > 1 ? "files" : "file";
+    for (const selected of files) form.append(fieldName, selected);
     // The browser sets the multipart boundary. The server parses and validates the file.
     return request<Version>(
       `/reports/${encodeURIComponent(reportId)}/versions`,
@@ -109,12 +114,25 @@ export const reportsApi = {
       },
     );
   },
-  create(name: string, period: string, file: File): Promise<Report> {
+  create(
+    name: string,
+    period: string,
+    file: File | File[],
+    bundle = false,
+  ): Promise<Report> {
     const form = new FormData();
     form.append("name", name);
     form.append("period", period);
-    form.append("file", file);
+    const files = Array.isArray(file) ? file : [file];
+    const fieldName = bundle || files.length > 1 ? "files" : "file";
+    for (const selected of files) form.append(fieldName, selected);
     return request<Report>("/reports", { method: "POST", body: form });
+  },
+  sourceUrl(versionId: string, fileId?: string): string {
+    const sourcePath = fileId
+      ? `/versions/${encodeURIComponent(versionId)}/files/${encodeURIComponent(fileId)}/source`
+      : `/versions/${encodeURIComponent(versionId)}/source`;
+    return `${API_BASE}${sourcePath}`;
   },
   suggestion(issue: Issue, versionId: string): Promise<Suggestion> {
     return request<Suggestion>(

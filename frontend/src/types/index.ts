@@ -1,22 +1,30 @@
 export type CellValue = string | number | boolean | null;
+export type RepeatStatus = "new" | "repeated" | "regressed";
 
-export interface DataRow {
+export interface DemoDataRow {
   id: string;
-  /** Life profile row number (1-based data row, not a physical CSV line). */
-  row?: number;
-  /** Dynamic source columns used by life_underwriting_v1. */
-  values?: Record<string, CellValue>;
-  /** demo_csv_v1 fields retained for the original demo profile. */
-  product?: string;
-  previous?: number;
-  opening?: number;
+  product: string;
+  previous: number;
+  opening: number;
 }
+
+export interface TextDataRow {
+  id: string;
+  row: number;
+  values: Record<string, CellValue>;
+  fileId?: string;
+  datasetType?: string;
+}
+
+export type DataRow = DemoDataRow | TextDataRow;
 
 export interface IssueCell {
   row: number;
   rowId: string;
   column: string;
   value: CellValue;
+  fileId?: string;
+  datasetType?: string;
 }
 
 export interface Issue {
@@ -24,12 +32,18 @@ export interface Issue {
   ruleId: string;
   title: string;
   repeated: boolean;
-  /** demo_csv_v1 issue fields */
+  repeatStatus?: RepeatStatus;
+  firstSeenNumber?: number;
+  prevSeenNumber?: number | null;
+  fixedInNumber?: number | null;
+  issueKey?: string;
+  severity?: "error" | "warning";
+  /** Single-file demo fields. */
   rowId?: string;
   field?: string;
   actual?: CellValue;
   expected?: CellValue;
-  /** life_underwriting_v1 issue fields */
+  /** Life profile and filing issue fields. */
   rows?: number[];
   rowIds?: string[];
   cells?: IssueCell[];
@@ -44,6 +58,17 @@ export interface ValidationSummary {
   notEvaluatedChecks: number;
 }
 
+export interface VersionFile {
+  id: string;
+  datasetType: string;
+  filename: string;
+  sourceSha256: string;
+  columns: string[];
+  rows: TextDataRow[];
+  prototype?: unknown;
+  eventDateColumn?: string;
+}
+
 export interface Version {
   id: string;
   number: number;
@@ -52,12 +77,24 @@ export interface Version {
   rows: DataRow[];
   issues: Issue[];
   columns?: string[];
-  schemaProfileId: string;
-  ruleVersion: string;
-  validationStatus: "completed";
-  validationRunId: string;
-  sourceSha256: string;
-  summary: ValidationSummary;
+  files?: VersionFile[];
+  schemaProfileId?: string;
+  ruleVersion?: string;
+  validationStatus?: "completed";
+  validationRunId?: string;
+  sourceSha256?: string;
+  manifestSha256?: string;
+  summary?: ValidationSummary;
+  evidence?: {
+    notice?: string;
+    executedRuleIds?: string[];
+    notEvaluated?: Array<{
+      code: string;
+      reason: string;
+      checks: number;
+      source?: string;
+    }>;
+  };
 }
 
 export interface Report {
@@ -66,7 +103,7 @@ export interface Report {
   period: string;
   versions: Version[];
   submittedVersionId?: string;
-  canSubmit: boolean;
+  canSubmit?: boolean;
 }
 
 export interface BackendHealth {
@@ -91,6 +128,8 @@ export interface Suggestion {
       row: number;
       column: string;
       value: CellValue;
+      fileId?: string;
+      datasetType?: string;
     }>;
   } | null;
   rejectedSuggestions: string[];
@@ -112,42 +151,20 @@ export interface EvaluationMetric {
   rate: number | null;
 }
 
-export interface AIEvaluation {
-  schemaVersion: number;
+export interface Evaluation {
+  schemaVersion?: number;
   model: string;
-  generatedAt: string;
-  dataset: {
-    description: string;
-    product: string;
-    rules: string;
-    cases: number;
-    violations: number;
+  generatedAt?: string;
+  dataset?: {
+    description?: string;
+    product?: string;
+    rules?: string;
+    cases?: number;
+    violations?: number;
   };
-  runs: Array<{
-    seed: number;
-    cases: number;
-    policies: number;
-    violations: number;
-    model: string;
-    elapsedSeconds: number;
-    handledCorrectly: EvaluationMetric;
-  }>;
-  metrics: {
-    handledCorrectly: EvaluationMetric;
-    restoredWhenInferable: EvaluationMetric;
-    heldBackWhenNotInferable: EvaluationMetric;
-    citedRule: EvaluationMetric;
-    aiExplanationUsed: EvaluationMetric;
-    numberGuardBlocked: EvaluationMetric;
-    llmErrors: EvaluationMetric;
-  };
-  outcomes: {
-    inferable: Record<string, number>;
-    unknowable: Record<string, number>;
-    otherRows: Record<string, number>;
-    rejectedByRevalidation: number;
-  };
-  byRule: Array<{
+  runs?: Array<Record<string, unknown>>;
+  metrics: Record<string, EvaluationMetric>;
+  byRule?: Array<{
     ruleId: string;
     violations: number;
     handledCorrectly: EvaluationMetric;
@@ -156,4 +173,12 @@ export interface AIEvaluation {
     citedRule: EvaluationMetric;
     numberGuardBlocked: number;
   }>;
+  outcomes?: Record<string, unknown>;
+  evaluationContext: {
+    evaluatedModel: string;
+    runtimeModel: string;
+    runtimeConfigured: boolean;
+    modelMatchesRuntime: boolean;
+    displayNotice: string;
+  };
 }
