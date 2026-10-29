@@ -21,7 +21,6 @@ export function exportReport(report: Report, version: Version) {
         version: version.number,
         filename: version.filename,
         generatedAt: new Date().toISOString(),
-        rules: ["R-01 險種不可空白", "R-07 期初等於上期末"],
         totalRows: version.rows.length,
         issues: version.issues,
       },
