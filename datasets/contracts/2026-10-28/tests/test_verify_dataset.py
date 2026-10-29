@@ -34,7 +34,7 @@ def test_default_validation_works_without_original_documents_or_network(tmp_path
     clean_package.mkdir()
     for filename in (
         "verify_dataset.py", "rule_inventory.json", "synthetic_rule_cases.jsonl",
-        "external_references.json", "source_manifest.json",
+        "external_references.json",
     ):
         shutil.copyfile(DATASET_ROOT / filename, clean_package / filename)
     assert not (clean_package / "originals").exists()

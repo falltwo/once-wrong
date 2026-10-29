@@ -13,7 +13,6 @@ import sys
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent
 HASH = re.compile(r"[0-9a-f]{64}\Z")
@@ -110,22 +109,6 @@ def validate_package(root: Path = ROOT) -> tuple[dict, list[dict]]:
                 f"{case_id}: training metadata is out of scope")
         _check_evidence(case["source_evidence"], by_source, case_id)
 
-    downloads = read_json(root / "source_manifest.json")["sources"]
-    require(len(downloads) == len({source["source_id"] for source in downloads}) == 11,
-            "Expected 11 optional public URL/hash references")
-    require(len({source["local_file"] for source in downloads}) == len(downloads),
-            "Duplicate optional download path")
-    for source in downloads:
-        require(set(source) == {"source_id", "source_page_url", "download_url", "sha256",
-                                "local_file"}, "Optional source manifest exceeds scope")
-        require(HASH.fullmatch(source["sha256"]) is not None, "Invalid public reference hash")
-        path = relative_path(source["local_file"], "originals")
-        require(path.suffix.lower() == ".pdf", "Optional download must be a PDF")
-        for key in ("source_page_url", "download_url"):
-            url = urlsplit(source[key])
-            require(url.scheme == "https" and bool(url.netloc)
-                    and PRIVATE_LINK.search(source[key]) is None, "Invalid public source URL")
-
     return {
         "checked_at": datetime.now(UTC).isoformat(),
         "package_integrity_status": "passed",
@@ -133,7 +116,6 @@ def validate_package(root: Path = ROOT) -> tuple[dict, list[dict]]:
         "synthetic_case_count": len(cases),
         "synthetic_status_counts": statuses,
         "private_manual_reference_count": len(sources),
-        "optional_public_reference_count": len(downloads),
         "parsed_data_files": parsed_files,
         "human_domain_review_completed": False,
         "backend_official_rule_acceptance_performed": False,

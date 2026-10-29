@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 import subprocess
 from pathlib import Path
@@ -15,6 +14,7 @@ REMOVED_CORPUS_FILES = {
     "clause_examples_life_annuity.jsonl", "comparison_pairs.json",
     "source_annotations_cancer_accident.json", "source_annotations_life_annuity.json",
     "source_index.json", "source_candidates.json", "excluded_sources.json",
+    "source_manifest.json", "fetch_sources.py", "test_fetch_sources.py",
 }
 PRIVATE_LINK = re.compile(r"https?://(?:drive|docs)\.google\.com(?:[/:?#]|$)", re.IGNORECASE)
 TEXT_SUFFIXES = {".md", ".json", ".jsonl", ".py", ".yml", ".yaml", ".txt"}
@@ -47,7 +47,7 @@ def test_public_tree_has_no_documents_or_organizer_download_links():
 
 def test_contract_corpus_and_training_preparation_are_outside_this_pr():
     published_dataset_files = {
-        path.name for path in _publication_files() if path.parent == DATASET_ROOT
+        path.name for path in _publication_files() if path.is_relative_to(DATASET_ROOT)
     }
     assert not published_dataset_files.intersection(REMOVED_CORPUS_FILES)
 
@@ -60,16 +60,3 @@ def test_private_manual_index_carries_only_offline_provenance(manual_references)
         assert re.fullmatch(r"[0-9a-f]{64}", source["sha256"])
         assert source["local_file"].startswith("official-materials/")
         assert not any("url" in key.lower() for key in source)
-
-
-def test_optional_public_manifest_keeps_urls_and_hashes_without_extracted_text():
-    manifest = json.loads((DATASET_ROOT / "source_manifest.json").read_text(encoding="utf-8-sig"))
-    sources = manifest["sources"]
-    assert len(sources) == len({source["source_id"] for source in sources}) == 11
-    assert len({source["sha256"] for source in sources}) == 11
-    for source in sources:
-        assert set(source) == {
-            "source_id", "source_page_url", "download_url", "sha256", "local_file"
-        }
-        assert source["download_url"].startswith("https://")
-        assert re.fullmatch(r"[0-9a-f]{64}", source["sha256"])

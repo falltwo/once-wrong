@@ -380,12 +380,11 @@
             19,
             126
           ],
-          "section": null,
-          "source_codes": [
-            "L"
-          ],
+          "section": "實體 p.19（印刷 p.17）表19及欄位32；實體 p.126（印刷 p.124）檢核說明表第1、2列",
+          "source_codes": [],
           "path_base": "reference_root",
-          "reference_scope": "external_project_reference_not_bundled"
+          "reference_scope": "external_project_reference_not_bundled",
+          "note": "p.126 兩列僅標示重複使用的 L，未提供可對接引擎的明確檢核代碼；source_codes 留空，以頁碼及列次定位，待官方釐清。"
         }
       ],
       "required_inputs": [
@@ -398,7 +397,7 @@
       "source_ambiguity": [
         "不得自行將p126的2改為1。"
       ],
-      "source_code_reuse_note": "L反覆用於不同條款，不是可唯一識別的規則碼。",
+      "source_code_reuse_note": "L 不是可對接引擎的明確檢核代碼，不列入 source_codes；本條以內部 rule_id 與頁碼／列次追蹤，待官方釐清後再建立代碼對應。",
       "scope_note": "僅判定本條邏輯，PASS 不表示整筆申報或合約全面合格。"
     },
     {
@@ -430,8 +429,10 @@
             58,
             111
           ],
-          "section": "給付類別規則與偽程式碼",
-          "source_codes": [],
+          "section": "伍-26 給付類別代碼檢核（D0102）；實體 p.111 偽程式碼保留 1–3 的來源差異",
+          "source_codes": [
+            "D0102"
+          ],
           "path_base": "reference_root",
           "reference_scope": "external_project_reference_not_bundled"
         }

@@ -36,20 +36,8 @@ python datasets/contracts/2026-10-28/verify_dataset.py --reference-root C:/team-
 ## 4. 接入正式規則引擎
 
 1. 覆核 `rule_inventory.json` 的適用條件、必要輸入、來源版本與歧義。來源衝突或必要依據不足時，維持無法判定。
-2. 在規則引擎實作經確認的規則，依內部 `rule_id` 配對案例。
+2. 在規則引擎實作經確認的規則，依內部 `rule_id` 配對案例；以 `source_evidence[].source_codes` 連接手冊檢核代碼，並同時核對來源版本及頁碼，不能假設代碼全域唯一。壽險給付種類對應 `D0102`。年金保證類型衝突的來源頁只標示重複的 `L`，因此代碼留空並以頁碼／列次定位；在官方釐清前不建立代碼對應，保留 `NOT_EVALUATED`。
 3. 使用 `tests/conftest.py` 的參數化 `rule_case` fixture 將 `records` 交給引擎，以 `expected_status` 與必要 Finding 作斷言。fixture 的測試 ID 對應 `case_id`，方便定位。
 4. 在實際引擎測試接通前，不將目前的資料契約測試宣稱為業務規則驗收。案例中的預期結果不能當成引擎輸入或直接回傳值。
 
 本資料包的 normalized JSON 不是可直接上傳的 demo CSV，也不是官方定長 TXT；轉接層需在正式資料格式確定後另行實作。
-
-## 選用：保留的公開來源紀錄
-
-`source_manifest.json` 只留下先前 11 份保險公司來源的 URL、固定 SHA-256 與本地下載檔名；這些來源不參與申報驗證器或上述測試。
-
-需要本機查閱時才執行：
-
-```sh
-python datasets/contracts/2026-10-28/fetch_sources.py
-```
-
-下載使用正常 TLS 驗證，保存前核對雜湊，來源改版時拒絕保存。`originals/` 已忽略，不將取得的 PDF 加回版本庫；CI 不執行此命令。

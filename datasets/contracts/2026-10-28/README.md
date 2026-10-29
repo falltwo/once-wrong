@@ -39,11 +39,9 @@ python datasets/contracts/2026-10-28/verify_dataset.py --reference-root C:/team-
 
 `--reference-root` 指向內含 `official-materials/` 的上層目錄；不使用這個目錄中的檔案更新或取代目前保存的雜湊。
 
-## 公開來源紀錄
+## 手冊來源
 
-[source_manifest.json](source_manifest.json) 僅保留先前 11 份保險公司公開來源的 URL、SHA-256 與下載檔名。PDF 不隨 repo 散布，也不是本資料包或規則驗證的必要依賴。
-
-需要本機查閱這些既有來源時，可明確執行 `python datasets/contracts/2026-10-28/fetch_sources.py`。檔案下載到已忽略的 `originals/`，下載器會核對固定雜湊，來源改版或內容不符時拒絕保存；CI 不執行下載。保留來源紀錄不表示重新散布或模型訓練用途已獲授權。
+本資料包不包含保險公司條款來源清單或下載工具；這些資料與目前 12 項規則、24 筆案例無關。
 
 主辦方手冊只公開內部 alias、檔名、雜湊與頁碼／章節，不公開 Drive 連結或可還原連結的檔案 ID。請私下向組長取得授權使用的副本。
 

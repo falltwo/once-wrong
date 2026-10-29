@@ -104,3 +104,23 @@ def test_each_fixture_preserves_synthetic_identifiers_and_lossless_types(rule_ca
             assert isinstance(value, str) and re.fullmatch(r"[0-9]{5}", value)
         if key == "benefit_code":
             assert isinstance(value, str) and re.fullmatch(r"[0-9]{3}", value)
+
+
+def test_life_benefit_enum_links_to_the_field_table_check(rule_inventory):
+    rule = next(rule for rule in rule_inventory["rules"]
+                if rule["rule_id"] == "LIFE.LFD.benefit_type_current_manual")
+    evidence = next(item for item in rule["source_evidence"]
+                    if item["source_id"] == "RULES-LIFE-2025")
+    assert evidence["source_codes"] == ["D0102"]
+    assert 58 in evidence["physical_pages"]
+    assert rule["source_ambiguity"]  # The 1–6 / 1–3 conflict remains unresolved.
+
+
+def test_annuity_conflict_has_a_locator_without_an_invented_engine_code(rule_inventory):
+    rule = next(rule for rule in rule_inventory["rules"]
+                if rule["rule_id"] == "ANNUITY.GUARANTEE.type_period_conflict")
+    evidence = rule["source_evidence"][0]
+    assert evidence["source_codes"] == []
+    assert evidence["physical_pages"] == [19, 126]
+    assert evidence["section"] and evidence["note"]
+    assert rule["source_ambiguity"]
