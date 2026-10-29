@@ -11,7 +11,13 @@ import { reportsApi } from "../api/reports";
 import { Loading, ErrorState } from "../components/QueryStates";
 import { exportReport } from "../utils/exportReport";
 import { date } from "../utils/format";
-import { repeatState, stateLabel } from "../utils/issues";
+import {
+  fileLabel,
+  issueLocation,
+  issueStatus,
+  statusClass,
+  statusLabel,
+} from "../utils/reportData";
 
 export function CheckReportPage() {
   const { reportId = "" } = useParams();
@@ -50,7 +56,8 @@ export function CheckReportPage() {
           <div className="eyebrow">VALIDATION RECORD</div>
           <h1>檢核報告與版本紀錄</h1>
           <p>
-            {report.period} {report.name} · 後端檢核結果
+            {report.period} {report.name} · {version.schemaProfileId} /{" "}
+            {version.ruleVersion}
           </p>
         </div>
         <button
@@ -68,51 +75,50 @@ export function CheckReportPage() {
         <p>
           {version.filename} · {date(version.createdAt)}
         </p>
-        {!!version.summary?.notEvaluatedChecks && (
-          <p className="text-orange">
-            另有 {version.summary.notEvaluatedChecks} 項未評估，不能視為通過。
-          </p>
-        )}
-        {version.files && (
-          <div className="version-files">
+        {version.files?.length ? (
+          <ul className="record-files">
             {version.files.map((file) => (
-              <a
-                key={file.id}
-                href={reportsApi.sourceUrl(version.id, file.id)}
-                download
-              >
-                {file.datasetType} · {file.filename}
-              </a>
+              <li key={file.id}>
+                <strong>{fileLabel(file)}</strong> · {file.filename} ·{" "}
+                {file.rows.length} 筆
+                <a href={reportsApi.sourceUrl(version.id, file.id)} download>
+                  下載來源檔
+                </a>
+              </li>
             ))}
-          </div>
+          </ul>
+        ) : (
+          <p>
+            <a href={reportsApi.sourceUrl(version.id)} download>
+              下載原始檔
+            </a>
+          </p>
         )}
         <p>
           資料共 {version.rows.length} 筆，執行{" "}
           {version.summary?.totalChecks ?? "—"} 項檢核，其中{" "}
-          {version.summary?.failedChecks ?? "—"} 項未通過。
+          {version.summary?.failedChecks ?? "—"} 項未通過，未執行{" "}
+          {version.summary?.notEvaluatedChecks ?? "—"} 項。
         </p>
+        {version.evidence?.notEvaluated?.map((item, index) => (
+          <p className="neutral-notice" key={`${item.code}:${index}`}>
+            {item.code}：{item.reason}（{item.checks} 項）
+          </p>
+        ))}
         {version.issues.map((issue) => (
           <div className="record-issue" key={issue.id}>
             <span className="rule-tag">{issue.ruleId}</span>
-            <strong>
-              {issue.rowId ??
-                issue.rowIds?.join("、") ??
-                issue.cells
-                  ?.map((cell) => `${cell.fileId ?? ""} 第${cell.row}列`)
-                  .join("、")}
-            </strong>
+            <strong>{issueLocation(issue)}</strong>
             <span>{issue.title}</span>
-            <span
-              className={`status ${repeatState(issue) === "new" ? "warning" : "bad"}`}
-            >
-              {stateLabel(issue)}
+            <span className={`status ${statusClass(issueStatus(issue))}`}>
+              {statusLabel(issueStatus(issue))}
             </span>
           </div>
         ))}
         {version.validationStatus === "completed" &&
           !version.issues.length &&
           !version.summary?.notEvaluatedChecks && (
-            <p className="text-green">目前適用檢核通過。</p>
+            <p className="text-green">所有示範檢核通過。</p>
           )}
       </section>
       <div className="section-line">
@@ -132,11 +138,7 @@ export function CheckReportPage() {
               </p>
             </div>
             <span className={`status ${v.issues.length ? "bad" : "good"}`}>
-              {v.issues.length
-                ? `${v.issues.length} 項錯誤`
-                : v.summary?.notEvaluatedChecks
-                  ? "尚有未評估"
-                  : "全部通過"}
+              {v.issues.length ? `${v.issues.length} 項錯誤` : "全部通過"}
             </span>
             <ChevronRight size={16} />
           </Link>

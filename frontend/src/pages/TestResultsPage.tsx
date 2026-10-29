@@ -1,350 +1,389 @@
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ChartNoAxesCombined,
   CircleHelp,
+  FileCheck2,
   FlaskConical,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 import { reportsApi } from "../api/reports";
 import { ErrorState, Loading } from "../components/QueryStates";
 import { evaluationMetrics } from "../utils/evaluation";
+import type { EvaluationMetric } from "../types";
 
-function RecordedEvaluation() {
-  const query = useQuery({
-    queryKey: ["evaluation"],
-    queryFn: reportsApi.evaluation,
-  });
-  if (query.isPending)
-    return (
-      <section aria-label="AI 審核評分">
-        <Loading />
-      </section>
-    );
-  if (query.isError)
-    return (
-      <section aria-label="AI 審核評分">
-        <ErrorState error={query.error} retry={() => query.refetch()} />
-      </section>
-    );
-  const result = query.data;
-  const context = result.evaluationContext;
-  const model = context?.evaluatedModel ?? result.model;
+const percent = (rate: number | null) =>
+  rate === null ? "—" : `${(rate * 100).toFixed(1)}%`;
+
+function MetricCard({
+  title,
+  metric,
+  basis,
+}: {
+  title: string;
+  metric: EvaluationMetric;
+  basis: string;
+}) {
   return (
-    <section className="recorded-evaluation" aria-label="AI 審核實測快照">
-      <div className="section-line">
-        <h2>AI 審核實測快照</h2>
-        <span>
-          {result.generatedAt
-            ? `評測日期：${result.generatedAt}`
-            : "既有評測紀錄"}
-        </span>
+    <article className="method-card">
+      <div className="method-name">
+        <span className="method-dot" />
+        <h3>{title}</h3>
       </div>
-      <p>
-        評測模型：<strong data-testid="evaluated-model">{model}</strong>
-        　目前執行設定：
-        <strong data-testid="runtime-model">
-          {context?.runtimeModel ?? "尚未提供"}
-        </strong>
-        {context?.runtimeConfigured === false ? "（尚未完成連線設定）" : ""}
-      </p>
-      <div className="prototype-warning" role="note">
-        <AlertTriangle size={20} />
+      <div className="metric-row">
         <div>
-          <strong>
-            {context?.displayNotice ??
-              "未提供執行模型比對資訊；此快照不可當作目前模型的成績。"}
+          <span>比例</span>
+          <strong>{percent(metric?.rate ?? null)}</strong>
+        </div>
+        <div>
+          <span>筆數</span>
+          <strong className="rule-version">
+            {metric ? `${metric.count} / ${metric.total}` : "—"}
           </strong>
-          <p>
-            這裡評估規則抓錯後的 AI 說明與修法，與下方示意的偵錯
-            precision／recall 分開計算。模型名稱相同也不代表目前版本已重新評測。
-          </p>
         </div>
       </div>
-      <div className="recorded-metrics">
-        {evaluationMetrics(result.metrics).map(
-          ({ key, label, basis, metric }) => {
-            return (
-              <article key={key}>
-                <span>{label}</span>
-                <strong>
-                  {Number.isFinite(metric.rate) && metric.total > 0
-                    ? `${(metric.rate * 100).toFixed(1)}%`
-                    : "—"}
-                </strong>
-                <small>
-                  {metric.count}／{metric.total} · {model}
-                </small>
-                <small>{basis}</small>
-              </article>
-            );
-          },
-        )}
+      <p className="metric-basis">分母：{basis}</p>
+      <div className="metric-bars">
+        <div>
+          <span>結果</span>
+          <div className="bar-track">
+            <div
+              className="bar-fill precision-fill"
+              style={{
+                width: metric?.rate == null ? "0%" : percent(metric.rate),
+              }}
+            />
+          </div>
+          <b>{percent(metric?.rate ?? null)}</b>
+        </div>
       </div>
-      {!result.metrics.endToEndHandledCorrectly && (
-        <p className="muted">
-          此舊快照未提供包含呼叫失敗的端到端分數；「取得模型回覆後處理正確」僅計算已取得回覆的錯誤。
-        </p>
-      )}
-      <p className="muted">
-        {result.dataset?.description ?? "樣本與評測範圍以後端紀錄為準。"}
-        {result.dataset?.cases !== undefined
-          ? ` 共 ${result.dataset.cases} 個案例。`
-          : ""}
-      </p>
-    </section>
+    </article>
   );
 }
 
-/** Illustrative values used only to demonstrate the evaluation page layout. */
-const examples = [
-  {
-    name: "只有規則",
-    key: "rules",
-    tp: 16,
-    fp: 4,
-    fn: 4,
-    tn: 76,
-    description: "符合規則的錯誤能穩定抓出；規則外的錯誤不會被發現。",
-  },
-  {
-    name: "只有 AI",
-    key: "ai",
-    tp: 18,
-    fp: 10,
-    fn: 2,
-    tn: 70,
-    description: "抓到較多錯誤，但也把部分正確資料標成錯誤。",
-  },
-  {
-    name: "Once Wrong",
-    key: "once-wrong",
-    tp: 18,
-    fp: 3,
-    fn: 2,
-    tn: 77,
-    description: "AI 協助說明，規則負責重驗建議與攔截重複錯誤。",
-  },
-];
-const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
-const metrics = (tp: number, fp: number, fn: number, tn: number) => ({
-  precision: tp / (tp + fp),
-  recall: tp / (tp + fn),
-  accuracy: (tp + tn) / (tp + fp + fn + tn),
-});
-
 export function TestResultsPage() {
+  const overviewQuery = useQuery({
+    queryKey: ["backend-validation-overview"],
+    queryFn: async () => {
+      const [health, reports] = await Promise.all([
+        reportsApi.health(),
+        reportsApi.list(),
+      ]);
+      return { health, reports };
+    },
+  });
+  const evaluationQuery = useQuery({
+    queryKey: ["backend-evaluation"],
+    queryFn: reportsApi.evaluationLatest,
+    retry: false,
+  });
+
+  if (overviewQuery.isPending) {
+    return (
+      <main>
+        <Loading />
+      </main>
+    );
+  }
+  if (overviewQuery.isError) {
+    return (
+      <main>
+        <ErrorState
+          error={overviewQuery.error}
+          retry={() => overviewQuery.refetch()}
+        />
+      </main>
+    );
+  }
+
+  const { health, reports } = overviewQuery.data;
+  const latestReports = reports.flatMap((report) => {
+    const version = report.versions.at(-1);
+    return version ? [{ report, version }] : [];
+  });
+  const totals = latestReports.reduce(
+    (result, { version }) => ({
+      rows: result.rows + version.rows.length,
+      checks: result.checks + (version.summary?.totalChecks ?? 0),
+      passed: result.passed + (version.summary?.passedChecks ?? 0),
+      failed: result.failed + (version.summary?.failedChecks ?? 0),
+      notEvaluated:
+        result.notEvaluated + (version.summary?.notEvaluatedChecks ?? 0),
+    }),
+    { rows: 0, checks: 0, passed: 0, failed: 0, notEvaluated: 0 },
+  );
+  const evaluation = evaluationQuery.data;
+  const dataset = evaluation?.dataset;
+  const byRule = evaluation?.byRule ?? [];
+  const displayedMetrics = evaluation
+    ? evaluationMetrics(evaluation.metrics)
+    : [];
+  const generatedDate = evaluation?.generatedAt
+    ? new Intl.DateTimeFormat("zh-TW", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: "Asia/Taipei",
+      }).format(new Date(evaluation.generatedAt))
+    : undefined;
+
   return (
     <main className="evaluation-page">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">BENCHMARK</div>
+          <div className="eyebrow">BACKEND EVALUATION</div>
           <h1>測試結果</h1>
-          <p>檢視有模型來源的 AI 審核評測，並了解偵錯指標如何計算。</p>
+          <p>分開呈現實際報表檢核與 AI 審核建議評測。</p>
         </div>
         <span className="benchmark-badge">
           <FlaskConical size={15} />
-          測試設計示意
+          {health.schemaProfileId} · {health.ruleVersion}
         </span>
       </div>
 
-      <RecordedEvaluation />
-
-      <section className="prototype-warning" role="note" aria-label="數據說明">
+      <section
+        className="prototype-warning"
+        role="note"
+        aria-label="評測資料說明"
+      >
         <AlertTriangle size={20} />
         <div>
-          <strong>以下數據是介面示意，不是實測成績</strong>
+          <strong>
+            {evaluation
+              ? "AI 審核分數來自後端評測快照，不是抓錯 Precision / Recall"
+              : "目前後端沒有可讀取的 AI 評測快照"}
+          </strong>
           <p>
-            用假設的 100
-            筆樣本展示指標如何呈現。完成標註與實驗後，請用真實結果取代；不要引用這些數字作為比賽結論。
+            {evaluation
+              ? `${evaluation.evaluationContext.displayNotice} 評測資料：${dataset?.product ?? "未提供資料類型"}，規則：${dataset?.rules ?? "未提供"}；不能解讀為正式資料上的模型成績。`
+              : "請確認後端已設定 ONCE_WRONG_EVALUATION，並提供有效的評測 JSON。"}
           </p>
         </div>
       </section>
 
-      <section className="benchmark-setup" aria-labelledby="setup-title">
-        <div className="setup-title">
-          <span>
-            <FlaskConical size={17} />
-          </span>
-          <div>
-            <h2 id="setup-title">測試資料設定</h2>
-            <p>比較前先固定樣本與標準答案，確保三種方式使用同一批資料。</p>
-          </div>
+      {evaluationQuery.isError && (
+        <div className="neutral-notice" role="status">
+          評測 API 暫不可用：{evaluationQuery.error.message}
+          <button
+            className="text-button"
+            onClick={() => evaluationQuery.refetch()}
+          >
+            重試
+          </button>
         </div>
-        <div className="setup-stats">
-          <div>
-            <span>示例樣本數</span>
-            <strong>
-              100 <small>筆</small>
-            </strong>
+      )}
+
+      {evaluation && (
+        <>
+          <section
+            className="benchmark-setup"
+            aria-labelledby="evaluation-data-title"
+          >
+            <div className="setup-title">
+              <span>
+                <FlaskConical size={17} />
+              </span>
+              <div>
+                <h2 id="evaluation-data-title">AI 評測資料</h2>
+                <p>
+                  評測模型 {evaluation.evaluationContext.evaluatedModel} ·
+                  執行模型{" "}
+                  {evaluation.evaluationContext.runtimeModel || "未設定"} ·
+                  產生於 {generatedDate ?? "時間未提供"}
+                </p>
+              </div>
+            </div>
+            <div className="setup-stats">
+              <div>
+                <span>案例數</span>
+                <strong>{dataset?.cases ?? "—"}</strong>
+              </div>
+              <div>
+                <span>違規數</span>
+                <strong className="text-red">
+                  {dataset?.violations ?? "—"}
+                </strong>
+              </div>
+              <div>
+                <span>測試輪次</span>
+                <strong>{evaluation.runs?.length ?? "—"}</strong>
+              </div>
+              <div>
+                <span>資料類型</span>
+                <strong className="setup-methods">
+                  {dataset?.product ?? "—"}
+                </strong>
+              </div>
+            </div>
+            <p className="evaluation-context-note">
+              {evaluation.evaluationContext.runtimeConfigured
+                ? evaluation.evaluationContext.modelMatchesRuntime
+                  ? "評測模型與目前執行模型相同。"
+                  : "評測模型與目前執行模型不同，請以模型欄位辨認這份快照。"
+                : "目前環境未設定執行模型；這份結果僅代表已保存的評測快照。"}
+            </p>
+          </section>
+
+          <div className="section-line evaluation-heading">
+            <h2>
+              <ChartNoAxesCombined size={18} />
+              AI 審核表現
+            </h2>
+            <span>以 {dataset?.violations ?? "—"} 筆違規為評測分母</span>
           </div>
-          <div>
-            <span>標準答案為錯誤</span>
-            <strong className="text-red">
-              20 <small>筆</small>
-            </strong>
-          </div>
-          <div>
-            <span>標準答案為正確</span>
-            <strong>
-              80 <small>筆</small>
-            </strong>
-          </div>
-          <div>
-            <span>對照組</span>
-            <strong className="setup-methods">
-              3 <small>種方式</small>
-            </strong>
-          </div>
-        </div>
-      </section>
+          <section className="method-cards" aria-label="AI 審核評測指標">
+            {displayedMetrics.length ? (
+              displayedMetrics.map(({ key, label, basis, metric }) => (
+                <MetricCard
+                  key={key}
+                  title={label}
+                  metric={metric}
+                  basis={basis}
+                />
+              ))
+            ) : (
+              <p className="muted">此評測快照沒有可顯示的指標。</p>
+            )}
+          </section>
+
+          {byRule.length > 0 && (
+            <section className="confusion-section">
+              <div className="section-line">
+                <h2>各規則評測結果</h2>
+                <span>{byRule.length} 條規則</span>
+              </div>
+              <div className="table-panel confusion-table-wrap">
+                <div className="table-scroll">
+                  <table className="confusion-table">
+                    <thead>
+                      <tr>
+                        <th>規則</th>
+                        <th className="number">違規數</th>
+                        <th className="number">正確處理</th>
+                        <th className="number">可推知時還原</th>
+                        <th className="number">不可推知時保留</th>
+                        <th className="number">引用規則</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {byRule.map((rule) => (
+                        <tr key={rule.ruleId}>
+                          <td>
+                            <strong>{rule.ruleId}</strong>
+                          </td>
+                          <td className="number">{rule.violations}</td>
+                          <td className="number">
+                            {percent(rule.handledCorrectly.rate)}
+                          </td>
+                          <td className="number">
+                            {percent(rule.restoredWhenInferable.rate)}
+                          </td>
+                          <td className="number">
+                            {percent(rule.heldBackWhenNotInferable.rate)}
+                          </td>
+                          <td className="number">
+                            {percent(rule.citedRule.rate)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <p className="matrix-note">
+                <CircleHelp size={14} />
+                後端沒有提供 ground truth 的規則抓錯 TP / FP / FN，因此此頁不計算
+                Precision、Recall 或 Accuracy。
+              </p>
+            </section>
+          )}
+        </>
+      )}
 
       <div className="section-line evaluation-heading">
         <h2>
-          <ChartNoAxesCombined size={18} />
-          偵錯能力比較
+          <FileCheck2 size={18} />
+          使用者報表檢核概況
         </h2>
-        <span>示例結果 · 分母以同一批 100 筆資料計算</span>
+        <span>只統計每份報表的最新版本，不重複加總歷史版本</span>
       </div>
-      <section
-        className="method-cards"
-        aria-label="各方法的 precision 與 recall 比較"
-      >
-        {examples.map((example) => {
-          const result = metrics(
-            example.tp,
-            example.fp,
-            example.fn,
-            example.tn,
-          );
-          return (
-            <article className={`method-card ${example.key}`} key={example.key}>
-              <div className="method-name">
-                <span className="method-dot" />
-                <h3>{example.name}</h3>
-                {example.key === "once-wrong" && (
-                  <span className="method-label">組合方式</span>
-                )}
-              </div>
-              <p>{example.description}</p>
-              <div className="metric-row">
-                <div>
-                  <span>Precision 精確率</span>
-                  <strong>{percent(result.precision)}</strong>
-                </div>
-                <div>
-                  <span>Recall 召回率</span>
-                  <strong>{percent(result.recall)}</strong>
-                </div>
-              </div>
-              <div className="metric-bars">
-                <div>
-                  <span>精確率</span>
-                  <div className="bar-track">
-                    <div
-                      className="bar-fill precision-fill"
-                      style={{ width: percent(result.precision) }}
-                    />
-                  </div>
-                  <b>{percent(result.precision)}</b>
-                </div>
-                <div>
-                  <span>召回率</span>
-                  <div className="bar-track">
-                    <div
-                      className="bar-fill recall-fill"
-                      style={{ width: percent(result.recall) }}
-                    />
-                  </div>
-                  <b>{percent(result.recall)}</b>
-                </div>
-              </div>
-            </article>
-          );
-        })}
-      </section>
-
-      <section className="confusion-section">
-        <div className="section-line">
-          <h2>每種方法抓到什麼</h2>
-          <span>數值為示意筆數</span>
+      <section className="benchmark-setup">
+        <div className="setup-stats">
+          <div>
+            <span>報表數</span>
+            <strong>{latestReports.length}</strong>
+          </div>
+          <div>
+            <span>資料筆數</span>
+            <strong>{totals.rows}</strong>
+          </div>
+          <div>
+            <span>規則檢查</span>
+            <strong>{totals.checks}</strong>
+          </div>
+          <div>
+            <span>未通過 / 通過 / 未評估</span>
+            <strong>
+              {totals.failed} / {totals.passed} / {totals.notEvaluated}
+            </strong>
+          </div>
         </div>
+      </section>
+      <div className="section-line">
+        <h2>各報表最新版</h2>
+        <span>{reports.length} 份報表</span>
+      </div>
+      {latestReports.length ? (
         <div className="table-panel confusion-table-wrap">
           <div className="table-scroll">
             <table className="confusion-table">
               <thead>
                 <tr>
-                  <th>檢查方式</th>
-                  <th className="number">抓到的錯誤 TP</th>
-                  <th className="number">誤報 FP</th>
-                  <th className="number">漏掉 FN</th>
-                  <th className="number">正確放行 TN</th>
-                  <th className="number">整體正確率</th>
+                  <th>報表</th>
+                  <th>期間</th>
+                  <th className="number">版本</th>
+                  <th className="number">資料筆數</th>
+                  <th className="number">檢查數</th>
+                  <th className="number">未通過</th>
                 </tr>
               </thead>
               <tbody>
-                {examples.map(({ name, key, tp, fp, fn, tn }) => {
-                  const result = metrics(tp, fp, fn, tn);
-                  return (
-                    <tr key={key}>
-                      <td>
-                        <strong>{name}</strong>
-                      </td>
-                      <td className="number text-green">{tp}</td>
-                      <td className="number text-orange">{fp}</td>
-                      <td className="number text-red">{fn}</td>
-                      <td className="number">{tn}</td>
-                      <td className="number">{percent(result.accuracy)}</td>
-                    </tr>
-                  );
-                })}
+                {latestReports.map(({ report, version }) => (
+                  <tr key={report.id}>
+                    <td>
+                      <Link to={`/reports/${report.id}`}>
+                        <strong>{report.name}</strong>
+                      </Link>
+                    </td>
+                    <td>{report.period}</td>
+                    <td className="number">第 {version.number} 版</td>
+                    <td className="number">{version.rows.length}</td>
+                    <td className="number">
+                      {version.summary?.totalChecks ?? "—"}
+                    </td>
+                    <td className="number">
+                      {version.summary?.failedChecks ?? "—"}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
-        <p className="matrix-note">
-          <CircleHelp size={14} />
-          TP = 抓到的真錯誤，FP = 把正確資料誤判為錯誤，FN = 漏掉的錯誤，TN =
-          正確放行的資料。
-        </p>
-      </section>
-
+      ) : (
+        <p className="muted intro-note">目前後端還沒有已完成檢核的報表。</p>
+      )}
       <section className="next-metrics">
         <div>
           <div className="next-metrics-icon">
             <CircleHelp size={18} />
           </div>
           <div>
-            <h2>目前版本的 AI 修正建議正確率</h2>
-            <p>
-              目前執行版本尚未重新評測；上方既有評測以記錄的模型與當時條件為準。
-            </p>
+            <h2>規則抓錯 Precision / Recall</h2>
+            <p>需要後端提供固定測試集的人工標註答案與各規則預測結果。</p>
           </div>
-          <span className="pending-metric">待測</span>
-        </div>
-        <div>
-          <div className="next-metrics-icon">
-            <ChartNoAxesCombined size={18} />
-          </div>
-          <div>
-            <h2>改到全數通過的輪數與處理時間</h2>
-            <p>
-              使用同一批錯誤報表計時，記錄每種方法完成修正所需的輪數和時間。
-            </p>
-          </div>
-          <span className="pending-metric">待測</span>
+          <span className="pending-metric">尚未提供</span>
         </div>
       </section>
-
-      <div className="methodology-note">
-        <strong>計算方式</strong>
-        <span>Precision = TP ÷ (TP + FP)</span>
-        <span>Recall = TP ÷ (TP + FN)</span>
-        <span>整體正確率 = (TP + TN) ÷ 全部樣本</span>
-        <p>
-          請先標記每筆測試資料的真實狀態，再分別執行三種方式。報告實測結果時，同時列出測試筆數與
-          TP、FP、FN、TN，方便評審核對比例。
-        </p>
-      </div>
     </main>
   );
 }

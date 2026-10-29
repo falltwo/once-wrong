@@ -1,6 +1,6 @@
 # 前端本機整合
 
-前端來源為 PR #1 的固定版本 `e287b1b04c9d8ffc9f3a224da509157cc516f2d4`，只取入 `frontend/`，沒有取用該分支舊版 backend。此檔案記錄接續 #5／#6 的本機整合，尚未推送。
+此整合分支以 PR #6 的 `f04fac1` 為基底，再移入 PR #1 的新版 `frontend/`（來源 `9cfb276`），沒有覆蓋或搬入 PR #1 的 backend。PR #6 的 API、Node 24 設定、套件 lockfile 與契約測試保留；前端新增 `/api` Vite proxy，以支援本機開發。
 
 ## 啟動與驗證
 
@@ -23,7 +23,7 @@ API 預設連到 `http://127.0.0.1:8000`。其他位址可在 `.env.local` 設 `
 - 多列錯誤在所有相關列顯示；多檔 rowId／fileId 分開定位，避免兩個檔案的「第 1 列」互相污染。檔案選單可限定範圍，原始檔可依 fileId 下載。
 - 支援 `new`、`repeated`、`regressed` 標籤與篩選；詳情顯示首次／前次出現版及復發前曾修好的版本，並連到對應歷史版本。
 - 錯誤詳情呈現 cells、facts、contextRowIds、重驗通過的建議及手冊頁碼。模型名稱取自回應，移除寫死 Gemini 的標籤。fallback 可由使用者手動重試。
-- 評分頁實際呼叫 `/evaluations/latest`；實測分數旁顯示評測模型及目前執行模型，並呈現 `evaluationContext.displayNotice`。原偵錯 precision／recall layout 保留，持續標示為示意數字。
+- 評分頁實際呼叫 `/evaluations/latest`；顯示 API 有回傳的指標、各自的分母、評測模型及目前執行模型，並呈現 `evaluationContext.displayNotice`。不把 AI 修法品質誤稱為規則抓錯的 Precision／Recall；只有 API 提供 `byRule` 時才呈現逐規則評測。
 - 單檔仍用 multipart `file`；選多檔或勾選同次申報時使用重複的 `files` 欄位。每次送出完整的檔案組，不能用缺檔的版本取代完整申報後假裝檢核通過。
 - summary 的未評估數量會顯示並阻止誤呈現為全部通過；確認按鈕仍以後端 `canSubmit` 為準。
 

@@ -54,24 +54,18 @@ export function ReportsPage() {
                 >
                   {latest.issues.length
                     ? `${latest.issues.length} 項待修正`
-                    : latest.summary?.notEvaluatedChecks
-                      ? "尚有未評估"
-                      : "全部通過"}
+                    : "全部通過"}
                 </span>
                 <ArrowRight size={20} />
               </Link>
             );
           })}
           {!query.data.length && (
-            <p className="muted intro-note">
-              目前沒有報表，新增報表並上傳 CSV 建立第一版。
-            </p>
+            <p className="muted intro-note">目前沒有報表，新增報表並上傳 CSV 建立第一版。</p>
           )}
         </>
       )}
-      {createOpen && (
-        <CreateReportDialog onClose={() => setCreateOpen(false)} />
-      )}
+      {createOpen && <CreateReportDialog onClose={() => setCreateOpen(false)} />}
     </main>
   );
 }
