@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
 from once_wrong_ai.ai_review.api import IssueResponse, SuggestionResponse
 
@@ -25,6 +25,11 @@ class Issue(BaseModel):
     actual: str | int
     expected: int | None = None
     repeated: bool
+    issueKey: str | None = None
+    repeatStatus: Literal["new", "repeated", "regressed"] | None = None
+    firstSeenNumber: int | None = None
+    prevSeenNumber: int | None = None
+    fixedInNumber: int | None = None
 
 
 class ValidationSummary(BaseModel):
@@ -56,6 +61,12 @@ class LifeDataRow(BaseModel):
     id: str
     row: int = Field(ge=1)
     values: dict[str, str]
+    fileId: str | None = None
+    datasetType: str | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        return {key: value for key, value in handler(self).items() if value is not None}
 
 
 class LifeVersion(VersionBase):
@@ -66,7 +77,31 @@ class LifeVersion(VersionBase):
     ruleVersion: Literal["life_field_rules_v1"]
 
 
-Version = Annotated[DemoVersion | LifeVersion, Field(discriminator="schemaProfileId")]
+class FilingFile(BaseModel):
+    id: str
+    datasetType: str
+    filename: str
+    sourceSha256: str
+    columns: list[str]
+    rows: list[LifeDataRow]
+    prototype: bool = True
+    eventDateColumn: str | None = None
+
+
+class FilingVersion(VersionBase):
+    rows: list[LifeDataRow]
+    issues: list[IssueResponse]
+    columns: list[str]
+    files: list[FilingFile]
+    manifestSha256: str
+    evidence: dict
+    schemaProfileId: Literal["life_filing_v1"]
+    ruleVersion: Literal["life_filing_rules_v1"]
+
+
+Version = Annotated[
+    DemoVersion | LifeVersion | FilingVersion, Field(discriminator="schemaProfileId")
+]
 
 
 class Report(BaseModel):

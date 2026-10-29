@@ -28,8 +28,8 @@ CHAINED_CHANGES = ("INN", "DNN", "HCC", "TPD", "PAU", "ROL", "INV")
 
 
 def _policy_key(row: dict) -> tuple:
-    """多筆檢核的單位：同一保單號碼（保單編號＋保單編號序號）。"""
-    return (row.get("保單編號"), row.get("保單編號序號"))
+    """多筆檢核的單位：同一家公司內的保單編號＋保單編號序號。"""
+    return (row.get("公司代號"), row.get("保單編號"), row.get("保單編號序號"))
 
 
 def _policy_groups(report: Report) -> dict[tuple, list[int]]:
@@ -66,7 +66,7 @@ class TransactionSequence:
 
     def check(self, report: Report) -> list[Violation]:
         violations = []
-        for (policy, sub), rows in _policy_groups(report).items():
+        for (_, policy, sub), rows in _policy_groups(report).items():
             expected = ["00000"] if len(rows) == 1 else [f"{n:05d}" for n in range(1, len(rows) + 1)]
             actual = [str(report.row(r).get("異動序號") or "") for r in rows]
             if actual != expected:

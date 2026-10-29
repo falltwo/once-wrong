@@ -16,12 +16,17 @@ from once_wrong_ai.ai_review.audit import AuditLog, MemoryAuditLog
 from once_wrong_ai.ai_review.guard import allowed_numbers, find_unsupported_numbers
 from once_wrong_ai.ai_review.llm import LLMClient, LLMError
 from once_wrong_ai.ai_review.models import (
+    CandidateReview,
     ExplanationSource,
     FixSuggestion,
     RejectedSuggestion,
     ReviewItem,
 )
-from once_wrong_ai.ai_review.prompts import SYSTEM_PROMPT, build_user_prompt, passage_label
+from once_wrong_ai.ai_review.prompts import (
+    SYSTEM_PROMPT,
+    build_user_prompt,
+    passage_label,
+)
 from once_wrong_ai.ai_review.validation import validate_candidate
 from once_wrong_ai.kb.memory import RuleMemory
 from once_wrong_ai.kb.models import Passage
@@ -100,8 +105,12 @@ class AIReviewer:
 
         accepted = None
         rejected: list[RejectedSuggestion] = []
-        for candidate in ai.candidates[: self.max_candidates]:
+        candidates: list[CandidateReview] = []
+        for rank, candidate in enumerate(ai.candidates[: self.max_candidates], start=1):
             outcome = validate_candidate(report, violation, candidate, self.rules, before)
+            candidates.append(CandidateReview(
+                rank, outcome.status, outcome.why, outcome.suggestion, candidate
+            ))
             if outcome.passed and accepted is None:
                 accepted = outcome.suggestion
             elif not outcome.passed:
@@ -115,6 +124,18 @@ class AIReviewer:
             *(v.message for v in related),
         ]
         unsupported = find_unsupported_numbers(shown_texts, allowed_numbers(report, violation, extra))
+        context_values = [
+            *(p.text for p in cited), *(n.note for n in notes),
+            *(v.message for v in related),
+        ]
+        for candidate in candidates:
+            candidate_values = (
+                list(candidate.suggestion.changes.values()) if candidate.suggestion else []
+            )
+            candidate.blocked_numbers = find_unsupported_numbers(
+                [candidate.raw.reason],
+                allowed_numbers(report, violation, [*candidate_values, *context_values]),
+            )
 
         self.audit.record(
             "ai_review",
@@ -135,6 +156,7 @@ class AIReviewer:
             item.rejected = rejected
             item.blocked_numbers = unsupported
             item.sources = cited
+            item.candidates = candidates
             return item
 
         return ReviewItem(
@@ -145,6 +167,7 @@ class AIReviewer:
             suggestion=accepted,
             rejected=rejected,
             sources=cited,
+            candidates=candidates,
         )
 
     @staticmethod

@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterable
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_serializer
 
 from once_wrong_ai.ai_review.models import ExplanationSource, ReviewItem
 from once_wrong_ai.report import Cell
@@ -51,23 +51,38 @@ class IssueCell(BaseModel):
     rowId: str
     column: str
     value: JsonValue
+    fileId: str | None = None
+    datasetType: str | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        return {key: value for key, value in handler(self).items() if value is not None}
 
 
 class IssueResponse(BaseModel):
     id: str
-    """`{第一列的 rowId}:{ruleId}`，跟後端 demo 的格式一致；同一份報表內不重複。"""
+    """版本內的定位 ID；不可直接用列號型 ID 判斷跨版本的同一錯誤。"""
+    issueKey: str | None = None
+    """後端依業務鍵產生的跨版本識別；純 AI 介面及舊版本可省略。"""
     ruleId: str
     title: str
     """規則的固定說明（AI 失敗時也顯示這段）。"""
     rows: list[int]
     rowIds: list[str]
     cells: list[IssueCell]
-    """出錯的格子；AI 的修法只能改這些格子所在的列。"""
+    """出錯的格子；AI 的修法只能改這些明確指定的格子。"""
     facts: dict[str, JsonValue]
     """程式算好的數字，例如應填的值、筆數。"""
     contextRowIds: list[str]
     """規則附上的參考列（例如同一保單的其他筆），畫面可以一起列出來。"""
     repeated: bool
+    repeatStatus: Literal["new", "repeated", "regressed"] | None = None
+    firstSeenNumber: int | None = None
+    prevSeenNumber: int | None = None
+    fixedInNumber: int | None = None
+    fileId: str | None = None
+    datasetType: str | None = None
+    localIssueId: str | None = None
 
 
 def issue_ids(violations: Iterable[Violation], row_id: RowId = row_number_id) -> list[str]:
@@ -133,6 +148,14 @@ class SuggestionChange(BaseModel):
     row: int
     column: str
     value: JsonValue
+    fileId: str | None = None
+    datasetType: str | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        data = handler(self)
+        return {key: value for key, value in data.items()
+                if key not in {"fileId", "datasetType"} or value is not None}
 
 
 class VerifiedSuggestion(BaseModel):

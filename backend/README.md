@@ -39,7 +39,7 @@ AI 保留上游 distribution 名稱 `once-wrong`，本機整合的 import 採文
 
 範例在根 [.env.example](../.env.example) 與 [backend/.env.example](.env.example)。API 設定以啟動前環境變數為準；以上指令透過 Uvicorn 的 `--env-file .env` 載入，未使用此選項時不應假定 API 設定會從檔案自動載入。
 
-團隊目前使用 OpenRouter，兩份範例已明確設定 `ONCE_WRONG_PROVIDER=openrouter`。在後端的 `.env` 或部署環境填入 `OPENROUTER_API_KEY`，並確認 `OPENROUTER_MODEL`；不需設定 Gemini 金鑰。金鑰不放進前端或 Git。缺少 OpenRouter 金鑰時會回固定說明，不會改呼叫 Gemini。
+AI 支援 Gemini／OpenRouter，未指定 `ONCE_WRONG_PROVIDER` 時，有 `OPENROUTER_API_KEY` 就選 OpenRouter，否則選 Gemini。也可明確指定供應商；明確指定後缺少該供應商金鑰時回固定說明，不會自動切換。依選擇填入 `OPENROUTER_API_KEY`／`OPENROUTER_MODEL` 或 `GOOGLE_API_KEY`／`ONCE_WRONG_MODEL`，金鑰只放後端環境，不放前端或 Git。設定來源見[沿革核對](../docs/provider-provenance.md)。
 
 | 變數 | 預設／用途 |
 | --- | --- |
@@ -54,6 +54,7 @@ AI 保留上游 distribution 名稱 `once-wrong`，本機整合的 import 採文
 | `OPENROUTER_MODEL` | 預設 `deepseek/deepseek-v4-flash`；依模型供應情況自行設定 |
 | `OPENROUTER_REASONING` | 選填 `low / medium / high` |
 | `OPENROUTER_TEMPERATURE` | 選填；省略時不送此參數 |
+| `OPENROUTER_MAX_TOKENS` | 選填正整數輸出上限；本次 Demo 評測使用 2048 |
 | `ONCE_WRONG_KB` | `data/kb` |
 | `ONCE_WRONG_RULE_MEMORY` | `config/rule_notes.jsonl` |
 | `ONCE_WRONG_EVALUATION` | `docs/evaluation/2026-10-28-gemini-3.5-flash.json` |
@@ -72,7 +73,9 @@ demo 使用 `id,product,previous,opening`，保留原本 rows／issues 格式。
 
 壽險 CSV 表頭恰為 `公司代號,保單編號,保單編號序號,異動序號,加保別,加保日期,退保別,退保日期`，欄位次序可不同；資料值皆保留文字。`rows=[{id:"1",row:1,values:{...}}]`，`columns` 保留來源順序，issues 含 cells、facts 與 contextRowIds，套用 11 條 `life_field_rules_v1` 規則。範例見 [mock_life_policies_2025.csv](../examples/mock_life_policies_2025.csv)。
 
-兩種格式均限 UTF-8、2 MiB、1–1,000 列。summary 的 totalChecks 為列數乘規則數，failedChecks 按失敗的規則與列計算。repeated 僅對同 profile 的緊鄰前一版比較同一 issue ID。
+單檔格式均限 UTF-8、2 MiB、1–1,000 列。summary 的 totalChecks 為列數乘規則數，failedChecks 按失敗的規則與列計算。壽險以業務 `issueKey` 比較歷史，不以列號判定；API 提供 new／repeated／regressed、首次／前次／修復版號，舊 repeated 布林保留。啟動會先備份並正規化舊資料，不改寫歷史 JSON／bytes；版本、錯誤、參考列及雜湊稽核鏈由資料庫約束。詳見[資料庫實作與回復](../docs/database-implementation.md)。
+
+多檔版本以重複的 multipart `files` 共同上傳承保、給付及填報對象 CSV，各種類最多一份、每檔仍限 2 MiB／1,000 列。每次修訂提供完整快照，整批原子保存；同公司／險種／年度只保留一個 report。`files` 與 cells 帶檔案定位，逐檔 source 下載並用 manifest hash 綁定整組。範例為 [examples/filing](../examples/filing/README.md)。目前僅執行已覆核的規則子集，未支援或缺檔的檢查列為未評估，不能確認為官方完整申報通過。
 
 ```powershell
 # 建立報表並上傳第一版：name 1–200 字，period 為 YYYY-MM。
@@ -86,9 +89,9 @@ curl.exe -F "file=@backend/tests/fixtures/sample-errors.csv" `
 
 `POST /reports` 在同一交易建立報表與第一版，回 201 `Report`。新增版本回 201 `Version`，檔案格式錯誤不留下成功版本。`GET /reports`／`GET /reports/{reportId}` 回傳同樣格式。
 
-`GET /versions/{versionId}/issues/{issueId}/suggestion` 使用 `SuggestionResponse` 完整欄位。AI 只在查詢時呼叫；同步呼叫進 threadpool，SDK／HTTP 網路 timeout 為 30 秒。修法套到副本重跑全部規則並檢查 profile 型別，原始版本不被改寫。成功與數字守門結果以 `(versionId,issueId)` 存 SQLite；LLM 失敗不存。
+`GET /versions/{versionId}/issues/{issueId}/suggestion` 使用 `SuggestionResponse` 完整欄位。AI 只在查詢時呼叫；同步呼叫進 threadpool，SDK／HTTP 網路 timeout 為 30 秒。修法只能改 `violation.cells` 明確指定的格子，並在副本重跑全部規則及檢查 profile 型別；原始版本不被改寫。`source=ai` 結果以 `(versionId,issueId)` 存 SQLite，LLM 失敗與數字守門 fallback 均不快取，可於下次查詢重試。啟動自動補上快取政策版本欄位，避開舊版整列驗證快取；原檔、版本與確認歷史保留。同問題的鎖在使用結束後釋放。
 
-`GET /evaluations/latest` 回上游 2026-10-28 已有的 Gemini 評分快照，可設定成其他 JSON 路徑。本次整合未產生新的付費 AI 實測；這份評分量的是抓錯後的 AI 說明／修法，不是抓錯 precision／recall。
+`GET /evaluations/latest` 預設回上游 2026-10-28 的 Gemini 評分快照，可設定成其他 JSON 路徑，另附 `evaluationContext` 比對評測與執行模型。前端把評測模型與分母放在分數旁，舊 93% 不可作為 OpenRouter 模型或目前格子限制政策的成績。2026-10-29 已完成[真實模型端到端驗收](../docs/evaluation/2026-10-29-live-system-e2e.md)；模型評分量的是抓錯後的 AI 說明／修法，不是抓錯 precision／recall。詳細契約見 [API 文件](../docs/backend-api.md)。
 
 `POST /reports/{reportId}/submissions` 僅內部確認，後端重查最新版與規則結果，未向外申報。舊版原檔、版本與確認歷史重啟後仍保留。
 
@@ -105,4 +108,4 @@ curl.exe -F "file=@backend/tests/fixtures/sample-errors.csv" `
 
 測試使用 fake LLM 與隔離資料庫，不需金鑰。GitHub Actions 在 Linux Python 3.11／3.12 與 Windows Python 3.12 執行兩組測試。
 
-本次 API 與套件驗證結果見 [AI API 整合驗收](../docs/ai-integration-acceptance.md)。前端分支的 Suggestion 型別與 `reportsApi.create()` 已有對應契約；壽險資料表與詳情仍須改為任意欄位與 cells／facts，評分頁須新增 AI 審核評分區塊。本次不包含壽險前端畫面驗收。早期 demo 流程的歷史驗收見 [backend-acceptance.md](../docs/backend-acceptance.md)。
+最新完整檢查見 [PR #5／#6 本機驗收](../docs/pr5-pr6-local-review-2026-10-29.md)。本機 `frontend/` 已整合任意欄位、三態歷史、多檔定位與評分模型來源，使用 Node 24 啟動及打包；[瀏覽器驗收](../docs/frontend-browser-acceptance.md)記錄實際操作。原 [AI API 整合驗收](../docs/ai-integration-acceptance.md)與 [早期 Demo 驗收](../docs/backend-acceptance.md)保留為歷史資料。

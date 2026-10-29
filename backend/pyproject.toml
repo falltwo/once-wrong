@@ -22,6 +22,9 @@ dev = ["pytest>=8,<10", "httpx>=0.27,<1.0", "ruff>=0.9,<1.0"]
 where = ["."]
 include = ["once_wrong", "once_wrong.*"]
 
+[tool.setuptools.package-data]
+once_wrong = ["schema.sql"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

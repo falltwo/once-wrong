@@ -243,10 +243,11 @@ def test_saved_forged_issue_is_not_authority_for_ai_review(database_path: Path):
             }
         ]
         with sqlite3.connect(database_path) as connection:
-            connection.execute(
-                "UPDATE versions SET payload_json = ? WHERE id = ?",
-                (json.dumps(version), version["id"]),
-            )
+            with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+                connection.execute(
+                    "UPDATE versions SET payload_json = ? WHERE id = ?",
+                    (json.dumps(version), version["id"]),
+                )
         response = client.get(suggestion_url(version))
         assert response.status_code == 404, response.text
         assert response.json()["code"] == "ISSUE_NOT_FOUND"
@@ -366,7 +367,9 @@ def test_failed_report_creation_leaves_no_empty_report(
         assert client.get("/reports").json() == []
 
 
-def test_evaluation_is_returned_unchanged_and_missing_file_has_specific_404(database_path: Path):
+def test_evaluation_preserves_recorded_fields_and_missing_file_has_specific_404(
+    database_path: Path,
+):
     evaluation_path = database_path.parent / "evaluation.json"
     evaluation = {
         "schemaVersion": 1,
@@ -385,7 +388,12 @@ def test_evaluation_is_returned_unchanged_and_missing_file_has_specific_404(data
     ) as client:
         response = client.get("/evaluations/latest")
         assert response.status_code == 200, response.text
-        assert response.json() == evaluation
+        payload = response.json()
+        context = payload.pop("evaluationContext")
+        assert payload == evaluation
+        assert context["evaluatedModel"] == evaluation["model"]
+        assert context["runtimeModel"] == FakeLLM.model_name
+        assert context["modelMatchesRuntime"] is False
         evaluation_path.unlink()
         missing = client.get("/evaluations/latest")
         assert missing.status_code == 404

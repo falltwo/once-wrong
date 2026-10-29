@@ -96,8 +96,8 @@ def answer_status(case: Case, violation: Violation, violations: list[Violation] 
 
     violations 是整份報表的錯誤：同一列的其他錯誤會一起送給 AI，它們涉及的列也算 AI 看得到。
     """
-    editable = set(violation.rows)
-    if not all(ref.row in editable for ref in case.changed):
+    editable = set(violation.cells)
+    if not all(ref in editable for ref in case.changed):
         return "other_rows"
     if case.mutation in _ALWAYS_INFERABLE:
         return "inferable"

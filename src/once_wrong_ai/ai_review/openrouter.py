@@ -7,6 +7,7 @@
 - OPENROUTER_REASONING：思考強度 low／medium／high，不設就用模型預設。思考 token 按輸出計費
 - OPENROUTER_TEMPERATURE：不設就不送。推理模型（例如 openai/gpt-6-luna）不接受 temperature，
   送了會因為「只用支援全部參數的供應商」而找不到任何供應商（404）
+- OPENROUTER_MAX_TOKENS：可選的正整數輸出上限；不設就沿用供應商預設
 
 要求模型照 `AIExplanation` 的 JSON schema 回覆，並只路由到支援這個參數、而且不保留資料的供應商。
 每次呼叫的 token 數和費用（美元）累計在 `usage`，評分和示範指令會印出來。
@@ -91,6 +92,7 @@ class OpenRouterConfig:
     temperature: float | None = None
     reasoning: str | None = None
     timeout: float = 30.0
+    max_tokens: int | None = None
 
     @classmethod
     def from_env(cls) -> OpenRouterConfig:
@@ -105,11 +107,23 @@ class OpenRouterConfig:
             temperature = float(temperature) if temperature is not None else None
         except ValueError as e:
             raise LLMError(f"OPENROUTER_TEMPERATURE 要是數字，收到 {temperature!r}") from e
+        max_tokens_text = os.environ.get("OPENROUTER_MAX_TOKENS") or None
+        max_tokens = None
+        if max_tokens_text is not None:
+            try:
+                if re.fullmatch(r"[0-9]+", max_tokens_text) is None:
+                    raise ValueError("not an ASCII integer")
+                max_tokens = int(max_tokens_text)
+                if max_tokens <= 0:
+                    raise ValueError("not positive")
+            except ValueError as e:
+                raise LLMError("OPENROUTER_MAX_TOKENS 必須是正整數") from e
         return cls(
             api_key=api_key,
             model=os.environ.get("OPENROUTER_MODEL") or DEFAULT_MODEL,
             reasoning=reasoning,
             temperature=temperature,
+            max_tokens=max_tokens,
         )
 
 
@@ -143,6 +157,8 @@ class OpenRouterClient:
             body["temperature"] = self.config.temperature
         if self.config.reasoning:
             body["reasoning"] = {"effort": self.config.reasoning}
+        if self.config.max_tokens is not None:
+            body["max_tokens"] = self.config.max_tokens
         return body
 
     def explain(self, system_prompt: str, user_prompt: str) -> AIExplanation:

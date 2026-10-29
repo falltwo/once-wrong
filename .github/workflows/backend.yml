@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "backend/**"
+      - "frontend/**"
       - "src/**"
       - "tests/**"
       - "config/**"
@@ -16,6 +17,7 @@ on:
   pull_request:
     paths:
       - "backend/**"
+      - "frontend/**"
       - "src/**"
       - "tests/**"
       - "config/**"
@@ -64,3 +66,20 @@ jobs:
         run: python -m pytest -q
       - name: AI and rule tests
         run: python -m pytest ../tests -q
+
+  frontend:
+    name: Frontend / Node 24
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

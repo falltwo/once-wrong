@@ -104,7 +104,10 @@ def test_reply_not_matching_schema_is_an_error():
 
 
 def test_provider_is_chosen_from_env(monkeypatch):
-    for name in ("ONCE_WRONG_PROVIDER", "OPENROUTER_API_KEY", "OPENROUTER_MODEL", "OPENROUTER_REASONING"):
+    for name in (
+        "ONCE_WRONG_PROVIDER", "OPENROUTER_API_KEY", "OPENROUTER_MODEL", "OPENROUTER_REASONING",
+        "OPENROUTER_MAX_TOKENS",
+    ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr("once_wrong_ai.ai_review.llm._load_dotenv", lambda: None)
 
@@ -129,3 +132,45 @@ def test_temperature_is_only_sent_when_set():
     assert "temperature" not in client.request_body("s", "u")
     client, _ = _client(_ok(json.dumps(REPLY)), temperature=0.2)
     assert client.request_body("s", "u")["temperature"] == 0.2
+
+
+@pytest.mark.parametrize("value,expected", [("1", 1), ("2048", 2048), ("0002", 2)])
+def test_max_tokens_from_env_accepts_positive_ascii_integer(monkeypatch, value, expected):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.delenv("OPENROUTER_REASONING", raising=False)
+    monkeypatch.delenv("OPENROUTER_TEMPERATURE", raising=False)
+    monkeypatch.setenv("OPENROUTER_MAX_TOKENS", value)
+    assert OpenRouterConfig.from_env().max_tokens == expected
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "+1", "1.5", "2e3", "true", "２０４８", " 2048 "])
+def test_max_tokens_from_env_rejects_non_positive_or_non_integer(monkeypatch, value):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.delenv("OPENROUTER_REASONING", raising=False)
+    monkeypatch.delenv("OPENROUTER_TEMPERATURE", raising=False)
+    monkeypatch.setenv("OPENROUTER_MAX_TOKENS", value)
+    with pytest.raises(LLMError, match="OPENROUTER_MAX_TOKENS 必須是正整數"):
+        OpenRouterConfig.from_env()
+
+
+@pytest.mark.parametrize("value", [None, ""])
+def test_max_tokens_from_env_defaults_to_unset(monkeypatch, value):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.delenv("OPENROUTER_REASONING", raising=False)
+    monkeypatch.delenv("OPENROUTER_TEMPERATURE", raising=False)
+    if value is None:
+        monkeypatch.delenv("OPENROUTER_MAX_TOKENS", raising=False)
+    else:
+        monkeypatch.setenv("OPENROUTER_MAX_TOKENS", value)
+    assert OpenRouterConfig.from_env().max_tokens is None
+
+
+@pytest.mark.parametrize("limit", [None, 1, 2048])
+def test_max_tokens_is_only_sent_when_configured(limit):
+    client, sent = _client(_ok(json.dumps(REPLY)), max_tokens=limit)
+    client.explain("s", "u")
+    body = json.loads(sent[0].content)
+    if limit is None:
+        assert "max_tokens" not in body
+    else:
+        assert body["max_tokens"] == limit

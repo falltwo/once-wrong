@@ -15,7 +15,6 @@ from once_wrong_ai.kb.models import Passage
 from once_wrong_ai.report import Cell, CellRef
 from once_wrong_ai.rules import Violation
 
-
 # ---- Gemini 回傳的結構（欄位盡量單純，Gemini 的 response_schema 不支援 dict / union）----
 
 
@@ -40,7 +39,7 @@ class AIExplanation(BaseModel):
 # ---- 審核流程的結果 ----
 
 
-class ExplanationSource(str, Enum):
+class ExplanationSource(str, Enum):  # noqa: UP042 - preserve the public Enum string representation
     AI = "ai"
     FALLBACK_LLM_ERROR = "fallback_llm_error"
     FALLBACK_NUMBER_GUARD = "fallback_number_guard"
@@ -60,6 +59,16 @@ class RejectedSuggestion:
 
 
 @dataclass
+class CandidateReview:
+    rank: int
+    revalidation: str
+    reason: str
+    suggestion: FixSuggestion | None
+    raw: AIFixCandidate
+    blocked_numbers: list[str] = field(default_factory=list)
+
+
+@dataclass
 class ReviewItem:
     violation: Violation
     title: str
@@ -73,3 +82,5 @@ class ReviewItem:
     """AI 說明裡對不上資料的數字（觸發整段攔下）。"""
     sources: list[Passage] = field(default_factory=list)
     """AI 引用、而且確實有提供給它的手冊段落。"""
+    candidates: list[CandidateReview] = field(default_factory=list)
+    """依原始排名保存全部候選的重驗結果，包含第二個以後通過的候選。"""

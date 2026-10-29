@@ -23,7 +23,7 @@ class Violation:
     message: str
     """給人看的固定說明（AI 失敗或被攔下時，就顯示這段）。"""
     cells: tuple[CellRef, ...]
-    """出錯的格子。AI 的修法只能改這些格子所在的列。"""
+    """出錯的格子。AI 的修法只能改這些明確指定的格子。"""
     facts: dict[str, FactValue] = field(default_factory=dict, compare=False, hash=False)
     """程式算好的數字，例如 expected / actual / diff。AI 只能引用這裡和報表上的數字。"""
     context_rows: tuple[int, ...] = field(default=(), compare=False, hash=False)

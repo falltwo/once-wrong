@@ -11,6 +11,7 @@ from once_wrong_ai.rules import RuleSet
 from once_wrong_ai.rules.examples import OpeningEqualsClosing, RequiredField
 from once_wrong_ai.rules.life import life_field_rules
 
+from .issue_identity import life_issue_key
 from .models import MAX_SAFE_INTEGER
 
 MAX_FILE_BYTES = 2 * 1024 * 1024
@@ -223,11 +224,12 @@ def report_for_version(version: dict, report_id: str) -> Report:
 
 
 def validate_profile(
-    rows: list[dict], profile_id: str, previous_issues: list[dict] | None = None
+    rows: list[dict], profile_id: str, previous_issues: list[dict] | None = None,
+    *, rules: RuleSet | None = None,
 ) -> list[dict]:
     if profile_id == SCHEMA_PROFILE:
         return validate(rows, previous_issues)
-    rules = rules_for_profile(profile_id)
+    rules = rules or rules_for_profile(profile_id)
     report = report_for_version(
         {
             "schemaProfileId": profile_id,
@@ -237,11 +239,14 @@ def validate_profile(
         },
         report_id="validation",
     )
-    previous_ids = {issue["id"] for issue in previous_issues or []}
+    previous_keys = {
+        issue["issueKey"] for issue in previous_issues or [] if issue.get("issueKey")
+    }
     payloads = issue_payloads(report.rows, rules.check(report), row_id=str)
     issues = [item.model_dump() for item in payloads]
     for issue in issues:
-        issue["repeated"] = issue["id"] in previous_ids
+        issue["issueKey"] = life_issue_key(issue, rows)
+        issue["repeated"] = issue["issueKey"] in previous_keys
     return issues
 
 
