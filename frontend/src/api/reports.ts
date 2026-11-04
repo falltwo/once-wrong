@@ -134,10 +134,21 @@ export const reportsApi = {
       : `/versions/${encodeURIComponent(versionId)}/source`;
     return `${API_BASE}${sourcePath}`;
   },
-  suggestion(issue: Issue, versionId: string): Promise<Suggestion> {
-    return request<Suggestion>(
+  apiUrl(path: string): string {
+    return `${API_BASE}${path}`;
+  },
+  async suggestion(issue: Issue, versionId: string): Promise<Suggestion> {
+    const result = await request<Suggestion>(
       `/versions/${encodeURIComponent(versionId)}/issues/${encodeURIComponent(issue.id)}/suggestion`,
     );
+    // ponytail: dev-only preview of manual evidence until the backend sends excerpts; on by
+    // default in `npm run dev`, off with ?evidenceDemo=0, never in production builds. The real
+    // response is kept and only labelled sample citations are added.
+    if (env?.DEV === true && new URLSearchParams(window.location.search).get("evidenceDemo") !== "0") {
+      const { withDemoEvidence } = await import("../dev/evidenceDemo");
+      return withDemoEvidence(issue, result);
+    }
+    return result;
   },
   submit(reportId: string, versionId: string): Promise<void> {
     return request<void>(

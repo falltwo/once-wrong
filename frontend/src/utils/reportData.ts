@@ -85,6 +85,22 @@ export function issueAffectsCell(
   return issue.rowId === row.id && issue.field === column;
 }
 
+// Demo rules compare the error cell with another column of the same row.
+const demoComparedColumns: Record<string, string[]> = { "R-07": ["previous"] };
+
+/** A cell the rule compared against (not itself wrong), e.g. 上月期末 for R-07. */
+export function issueComparesCell(
+  issue: Issue,
+  row: DataRow,
+  column: string,
+): boolean {
+  if (!issueAffectsRow(issue, row) || issueAffectsCell(issue, row, column))
+    return false;
+  if (issue.rowId === row.id && demoComparedColumns[issue.ruleId]?.includes(column))
+    return true;
+  return Boolean(issue.facts && column in issue.facts);
+}
+
 export function issueStatus(issue: Issue): RepeatStatus {
   return issue.repeatStatus ?? (issue.repeated ? "repeated" : "new");
 }
@@ -156,4 +172,25 @@ export function issueFacts(issue: Issue): Array<[string, CellValue]> {
     });
   }
   return issue.field ? [[issue.field, issue.actual ?? null]] : [];
+}
+
+/**
+ * The version that fixed this issue for good: the first later version after which the issue
+ * never appears again (matched by issueKey, not row). Undefined if the latest still has it.
+ */
+export function fixedInVersion(
+  issue: Issue,
+  versionNumber: number,
+  versions: Array<{ number: number; issues: Issue[] }>,
+): number | undefined {
+  const key = issue.issueKey ?? issue.id;
+  const later = versions
+    .filter((version) => version.number > versionNumber)
+    .sort((a, b) => a.number - b.number);
+  let fixedIn: number | undefined;
+  for (let index = later.length - 1; index >= 0; index -= 1) {
+    if (later[index].issues.some((other) => (other.issueKey ?? other.id) === key)) break;
+    fixedIn = later[index].number;
+  }
+  return fixedIn;
 }

@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Search, ShieldCheck, Sparkles, X } from "lucide-react";
 import { reportsApi } from "../../api/reports";
-import type { Issue, Report } from "../../types";
+import type { Citation, Issue, Report } from "../../types";
+import { ManualEvidenceList, ManualEvidenceView, Seal } from "./ManualEvidence";
 import {
   formatCell,
   datasetLabels,
+  fixedInVersion,
   issueFacts,
   issueLocation,
   lifeFieldLabels,
@@ -53,6 +55,10 @@ export function SuggestionPanel({
       : undefined;
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  const [evidence, setEvidence] = useState<Citation | null>(null);
+  const closeEvidence = useCallback(() => setEvidence(null), []);
+  const versionNumber = report.versions.find((v) => v.id === versionId)?.number ?? 0;
+  const fixedIn = fixedInVersion(issue, versionNumber, report.versions);
   return (
     <aside className="detail-panel">
       <div className="panel-title">
@@ -68,7 +74,9 @@ export function SuggestionPanel({
           <X size={17} />
         </button>
       </div>
-      <div className="panel-body">
+      <div className="panel-pages" data-page={evidence ? "evidence" : "main"}>
+      <div className="panel-body panel-page" inert={evidence !== null}>
+        {fixedIn ? <Seal fixedIn={fixedIn} /> : null}
         <div className="issue-tags">
           <span className="rule-tag">{issue.ruleId}</span>
           <span className={`status ${statusClass(issueStatus(issue))}`}>
@@ -231,25 +239,23 @@ export function SuggestionPanel({
               </p>
             )}
             {query.data.citations.length > 0 && (
-              <section className="suggestion-citations" aria-label="手冊依據">
-                <strong>手冊依據</strong>
-                <ul>
-                  {query.data.citations.map((citation) => (
-                    <li key={citation.id}>
-                      <span>{citation.source}</span>
-                      {citation.section.length > 0 && (
-                        <small>{citation.section.join(" › ")}</small>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </section>
+              <ManualEvidenceList
+                citations={query.data.citations}
+                rejectedQuotes={query.data.rejectedQuotes?.length ?? 0}
+                onOpen={setEvidence}
+              />
             )}
           </>
         )}
         <p className="panel-footnote">
           請核對來源後自行修改檔案，再上傳修正版。系統不會自動更動原始資料。
         </p>
+      </div>
+      <div className="panel-body panel-page" inert={evidence === null}>
+        {evidence && (
+          <ManualEvidenceView citation={evidence} fixedIn={fixedIn} onBack={closeEvidence} />
+        )}
+      </div>
       </div>
     </aside>
   );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -16,13 +16,23 @@ import {
   RotateCcw,
   ShieldCheck,
   Search,
+  Sparkles,
   AlertCircle,
 } from "lucide-react";
 import { reportsApi } from "../api/reports";
 import { Dialog } from "../components/Dialog";
+import { Hint } from "../components/Hint";
 import { Loading, ErrorState } from "../components/QueryStates";
 import { UploadDialog } from "../features/upload/UploadDialog";
 import { SuggestionPanel } from "../features/suggestions/SuggestionPanel";
+import { RowPanel } from "../features/rows/RowPanel";
+import { VersionTimeline } from "../features/versions/VersionTimeline";
+import { VersionStack } from "../features/versions/VersionStack";
+import { PassRateBar } from "../features/progress/PassRateBar";
+import { CellLink, DraftValue } from "../features/draft/InlineFix";
+import { correctedCsv, draftKey } from "../utils/draftCsv";
+import { useFileDrag } from "../utils/useFileDrag";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { exportReport } from "../utils/exportReport";
 import { date, money } from "../utils/format";
 import {
@@ -30,14 +40,41 @@ import {
   fileLabel,
   issueAffectsCell,
   issueAffectsRow,
+  issueComparesCell,
   issueStatus,
   lifeFieldLabels,
+  rowFileId,
   rowLabel,
   rowValues,
   statusClass,
   statusLabel,
 } from "../utils/reportData";
-import type { Report } from "../types";
+import type { CellValue, Issue, Report, Suggestion } from "../types";
+
+const demoFieldLabels: Record<string, string> = {
+  product: "險種",
+  previous: "上月期末",
+  opening: "本月期初",
+};
+const fieldLabel = (column: string) =>
+  lifeFieldLabels[column] ?? demoFieldLabels[column] ?? column;
+
+/** One line on where this error has appeared before, for the status label hint. */
+function issueHistoryHint(issue: Issue): string {
+  const first = issue.firstSeenNumber ? `第 ${issue.firstSeenNumber} 版首次出現` : "";
+  switch (issueStatus(issue)) {
+    case "repeated":
+      return [first, issue.prevSeenNumber ? `第 ${issue.prevSeenNumber} 版也有，還沒修好` : "上一版也有，還沒修好"]
+        .filter(Boolean)
+        .join("，");
+    case "regressed":
+      return [first, issue.fixedInNumber ? `第 ${issue.fixedInNumber} 版曾修好` : "曾經修好", "這一版又出現"]
+        .filter(Boolean)
+        .join("，");
+    default:
+      return "這一版第一次出現";
+  }
+}
 
 export function WorkspacePage() {
   const { reportId = "" } = useParams();
@@ -66,15 +103,81 @@ export function Workspace({ report }: { report: Report }) {
   const [confirm, setConfirm] = useState(false);
   const [search, setSearch] = useState("");
   const client = useQueryClient();
+  /**
+   * Hover hint for an error cell. Uses only an AI review already loaded for this issue, so
+   * hovering never starts a (paid) model call; otherwise it just names the rule.
+   */
+  const peekHint = (issue: Issue) => {
+    const review = client.getQueryData<Suggestion>(["suggestion", version.id, issue.id]);
+    const page = review?.citations.find((citation) => citation.page)?.page;
+    return (
+      <span className="peek">
+        <Sparkles size={13} aria-hidden="true" className="peek-icon" />
+        <span>
+          <strong>
+            {issue.ruleId} · {issue.title}
+          </strong>
+          <span>
+            {review?.source === "ai" && page
+              ? `AI 說明引用手冊第 ${page} 頁，點擊查看修正建議`
+              : page
+                ? `手冊依據在第 ${page} 頁，點擊查看說明`
+                : "點擊查看規則說明與修正建議"}
+          </span>
+        </span>
+      </span>
+    );
+  };
   const latest = report.versions.at(-1)!;
   const version =
     report.versions.find((v) => v.id === params.get("version")) ?? latest;
   const filter = params.get("filter") ?? "all";
   const fileScope = params.get("file") ?? "all";
   const files = version.files ?? [];
+  // Row state per id in the previous version, so rows whose result changed can flash.
+  const previousVersion = report.versions.find((v) => v.number === version.number - 1);
+  const rowState = (issues: typeof version.issues, row: (typeof version.rows)[number]) =>
+    issues
+      .filter((issue) => issueAffectsRow(issue, row))
+      .map((issue) => `${issue.ruleId}:${issueStatus(issue)}`)
+      .join(",");
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  // Celebrate only a version the user just uploaded, never when browsing history.
+  const [justUploaded, setJustUploaded] = useState<string | null>(null);
+  const clearJustUploaded = useCallback(() => setJustUploaded(null), []);
+  // Dropping CSV files anywhere on the workspace opens the upload dialog with them.
+  const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
+  const openWithFiles = useCallback((files: File[]) => {
+    setDroppedFiles(files);
+    setUpload(true);
+  }, []);
+  const fileDragging = useFileDrag(!upload, openWithFiles);
+  // Draft fixes live only in the browser until the user downloads and re-uploads them.
+  const [draftState, setDraftState] = useState<{
+    versionId: string;
+    cells: Record<string, CellValue>;
+  }>({ versionId: version.id, cells: {} });
+  const drafts = draftState.versionId === version.id ? draftState.cells : {};
+  const draftCount = Object.keys(drafts).length;
+  const setDraft = (key: string, value: CellValue) =>
+    setDraftState({ versionId: version.id, cells: { ...drafts, [key]: value } });
   const selected = params.has("issue")
     ? version.issues.find((i) => i.id === params.get("issue"))
     : version.issues[0];
+  const selectedRow = selected
+    ? undefined
+    : version.rows.find((row) => row.id === params.get("row"));
+  // Same query key as the detail panel, so this reuses its request.
+  const suggestionQuery = useQuery({
+    queryKey: ["suggestion", version.id, selected?.id],
+    queryFn: () => reportsApi.suggestion(selected!, version.id),
+    enabled: Boolean(selected),
+  });
+  const verifiedChanges =
+    suggestionQuery.data?.verification === "passed" &&
+    suggestionQuery.data.suggestion?.verification === "passed"
+      ? suggestionQuery.data.suggestion.changes
+      : [];
   const repeated = version.issues.filter(
     (i) => issueStatus(i) === "repeated",
   ).length;
@@ -139,7 +242,14 @@ export function Workspace({ report }: { report: Report }) {
         : (version.columns ?? ["product", "previous", "opening"]);
   const isLifeProfile = version.schemaProfileId === "life_underwriting_v1";
   return (
-    <main className="workspace">
+    <main className={`workspace ${fileDragging ? "file-dragging" : ""}`}>
+      {fileDragging && (
+        <div className="drop-overlay" aria-hidden="true">
+          <Plus size={28} />
+          <strong>放開以上傳修正版</strong>
+          <span>會建立第 {latest.number + 1} 版，舊版本保留不變</span>
+        </div>
+      )}
       <Link className="back-link" to="/reports">
         <ArrowLeft size={14} />
         所有報表
@@ -156,10 +266,22 @@ export function Workspace({ report }: { report: Report }) {
           </h1>
           <p>在每次送出之前，讓資料多一份確定。</p>
         </div>
-        <button className="primary" onClick={() => setUpload(true)}>
-          <Plus size={17} />
-          上傳修正版
-        </button>
+        <div className="heading-actions">
+          {report.versions.length > 1 && (
+            <VersionStack
+              versions={report.versions}
+              currentId={version.id}
+              latestId={latest.id}
+              onSelect={(versionId) =>
+                updateParams({ version: versionId, issue: "", row: "", file: "all" })
+              }
+            />
+          )}
+          <button className="primary" onClick={() => setUpload(true)}>
+            <Plus size={17} />
+            上傳修正版
+          </button>
+        </div>
       </div>
       <div className="workflow">
         <span className="complete">
@@ -181,6 +303,11 @@ export function Workspace({ report }: { report: Report }) {
           最後更新 {date(version.createdAt)}
         </small>
       </div>
+      <PassRateBar
+        summary={version.summary}
+        celebrate={justUploaded === version.id}
+        onCelebrated={clearJustUploaded}
+      />
       <section className="metrics" aria-label="檢核摘要">
         <div>
           <span>報表資料</span>
@@ -264,26 +391,17 @@ export function Workspace({ report }: { report: Report }) {
           資料檢核結果
         </h2>
         <div className="toolbar">
-          <label className="version-select">
-            <History size={15} />
-            <select
-              aria-label="選擇報表版本"
-              value={version.id}
-              onChange={(e) =>
-                updateParams({
-                  version: e.target.value,
-                  issue: "",
-                  file: "all",
-                })
+          <div className="version-select">
+            <History size={15} aria-hidden="true" />
+            <VersionTimeline
+              versions={report.versions}
+              currentId={version.id}
+              latestId={latest.id}
+              onSelect={(versionId) =>
+                updateParams({ version: versionId, issue: "", row: "", file: "all" })
               }
-            >
-              {[...report.versions].reverse().map((v) => (
-                <option key={v.id} value={v.id}>
-                  第 {v.number} 版{v.id === latest.id ? "（最新）" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
+            />
+          </div>
           {files.length > 0 && (
             <label className="version-select">
               <FileSpreadsheet size={15} />
@@ -323,8 +441,24 @@ export function Workspace({ report }: { report: Report }) {
           </button>
         </div>
       </div>
-      <section className={`results ${selected ? "" : "no-detail"}`}>
+      {/* The report unfolds out of the depth like a folding screen book (once per page load). */}
+      <motion.div
+        className="results-stage"
+        style={{ transformPerspective: 1200, transformOrigin: "top center" }}
+        initial={{ opacity: 0, rotateX: 22, scaleY: 0.82, y: 40 }}
+        animate={{ opacity: 1, rotateX: 0, scaleY: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 90, damping: 16, mass: 1.1 }}
+      >
+      <section
+        className={`results ${selected || selectedRow ? "" : "no-detail"} ${version.id !== latest.id ? "history-view" : ""}`}
+      >
         <div className="table-panel">
+          {version.id !== latest.id && (
+            <div className="history-badge" role="note">
+              <History size={13} aria-hidden="true" />
+              歷史版本 · 第 {version.number} 版（最新是第 {latest.number} 版）
+            </div>
+          )}
           <div className="table-tools">
             <div className="tabs" role="group" aria-label="篩選檢核結果">
               {[
@@ -356,40 +490,99 @@ export function Workspace({ report }: { report: Report }) {
               />
             </label>
           </div>
-          <div className="table-scroll">
+          {draftCount > 0 && (
+            <div className="draft-bar" role="status">
+              <span>
+                有 {draftCount} 筆修正草稿，<strong>尚未驗證</strong>。下載修正後檔案、核對後用「上傳修正版」送出，系統會重新檢核並留下新版本。
+              </span>
+              <div>
+                {files.length ? (
+                  <small>多檔申報的修正檔下載之後補上</small>
+                ) : (
+                  <button
+                    className="draft-download"
+                    onClick={() => {
+                      const csv = correctedCsv(version.rows, columns, drafts);
+                      if (!csv) return;
+                      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+                      const link = document.createElement("a");
+                      link.href = url;
+                      link.download = `修正草稿-第${version.number}版.csv`;
+                      link.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    <ArrowDownToLine size={14} aria-hidden="true" />
+                    下載修正後檔案
+                  </button>
+                )}
+                <button
+                  className="text-button"
+                  onClick={() => setDraftState({ versionId: version.id, cells: {} })}
+                >
+                  捨棄草稿
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="table-scroll" ref={tableScrollRef}>
+            {selected && (
+              <CellLink
+                container={tableScrollRef}
+                label={selected.ruleId === "R-07" ? "應相等" : "規則比對"}
+                trigger={`${version.id}:${selected.id}:${filter}:${search}:${draftCount}`}
+              />
+            )}
             <table>
               <thead>
                 <tr>
                   <th>{isLifeProfile ? "資料列" : "資料 ID"}</th>
                   {columns.map((column) => (
-                    <th key={column}>
-                      {lifeFieldLabels[column] ??
-                        {
-                          product: "險種",
-                          previous: "上月期末",
-                          opening: "本月期初",
-                        }[column] ??
-                        column}
-                    </th>
+                    <th key={column}>{fieldLabel(column)}</th>
                   ))}
                   <th>檢核狀態</th>
                 </tr>
               </thead>
-              <tbody>
+              <MotionConfig reducedMotion="user">
+              <tbody className={selected || selectedRow ? "has-selection" : ""}>
+                <AnimatePresence initial={false}>
                 {visibleRows.map((row) => {
                   const issues = version.issues.filter((issue) =>
                     issueAffectsRow(issue, row),
                   );
                   const values = rowValues(row);
                   const issue = issues[0];
+                  const selectRow = () =>
+                    updateParams(
+                      issue ? { issue: issue.id, row: "" } : { issue: "", row: row.id },
+                    );
+                  const isSelected = selected
+                    ? issueAffectsRow(selected, row)
+                    : selectedRow?.id === row.id;
+                  const changed =
+                    previousVersion !== undefined &&
+                    rowState(previousVersion.issues, row) !== rowState(version.issues, row);
                   return (
-                    <tr
+                    <motion.tr
                       key={row.id}
-                      className={
-                        selected && issueAffectsRow(selected, row)
-                          ? "selected-row"
-                          : ""
-                      }
+                      layout="position"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.32, ease: [0.2, 0.7, 0.2, 1] }}
+                      className={`selectable-row ${isSelected ? "selected-row" : ""} ${changed ? "row-changed" : ""}`}
+                      tabIndex={0}
+                      aria-current={isSelected ? "true" : undefined}
+                      onClick={(event) => {
+                        // The status buttons open their own issue.
+                        if (!(event.target as HTMLElement).closest("button")) selectRow();
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                          event.preventDefault();
+                          selectRow();
+                        }
+                      }}
                     >
                       <td className="row-id">{rowLabel(row)}</td>
                       {columns.map((column) => {
@@ -401,14 +594,48 @@ export function Workspace({ report }: { report: Report }) {
                           !isLifeProfile &&
                           (column === "previous" || column === "opening") &&
                           typeof value === "number";
+                        const format = (cell: CellValue) =>
+                          isAmount && typeof cell === "number" ? money(cell) : formatCell(cell);
+                        const cellIssue = issues.find((i) => issueAffectsCell(i, row, column));
+                        const key = draftKey(row.id, column);
+                        const drafted = key in drafts;
+                        const change = verifiedChanges.find(
+                          (c) =>
+                            c.rowId === row.id &&
+                            c.column === column &&
+                            (!c.fileId || c.fileId === rowFileId(row)),
+                        );
+                        const focusClass = !selected
+                          ? ""
+                          : issueAffectsCell(selected, row, column)
+                            ? "cell-focus-error"
+                            : issueComparesCell(selected, row, column)
+                              ? "cell-focus-compare"
+                              : "";
                         return (
                           <td
                             key={column}
-                            className={`${isAmount ? "number" : ""} ${invalid ? "invalid-cell" : ""}`}
+                            className={`${isAmount ? "number" : ""} ${invalid ? "invalid-cell" : ""} ${focusClass} ${drafted ? "draft-cell" : ""}`}
                           >
-                            {isAmount
-                              ? money(value as number)
-                              : formatCell(value)}
+                            {drafted ? (
+                              <DraftValue from={value} to={drafts[key]} format={format} />
+                            ) : cellIssue ? (
+                              <Hint content={peekHint(cellIssue)}>
+                                <span className="cell-peek">{format(value)}</span>
+                              </Hint>
+                            ) : (
+                              format(value)
+                            )}
+                            {change && !drafted && (
+                              <button
+                                className="fix-pill"
+                                onClick={() => setDraft(key, change.value)}
+                                aria-label={`把${fieldLabel(column)}改成 ${format(change.value)}（已通過規則重驗，先存成草稿）`}
+                              >
+                                建議改成 {format(change.value)}
+                                <small>已通過重驗</small>
+                              </button>
+                            )}
                           </td>
                         );
                       })}
@@ -416,20 +643,21 @@ export function Workspace({ report }: { report: Report }) {
                         {issue ? (
                           <div className="row-issues">
                             {issues.map((i) => (
-                              <button
-                                key={i.id}
-                                className={`status issue-button ${statusClass(issueStatus(i))}`}
-                                onClick={() => updateParams({ issue: i.id })}
-                                aria-label={`查看 ${row.id} ${i.ruleId} 錯誤`}
-                              >
-                                {issueStatus(i) !== "new" ? (
-                                  <RotateCcw size={12} />
-                                ) : (
-                                  <AlertCircle size={12} />
-                                )}
-                                {statusLabel(issueStatus(i))}
-                                {issues.length > 1 && ` ${i.ruleId}`}
-                              </button>
+                              <Hint key={i.id} content={issueHistoryHint(i)}>
+                                <button
+                                  className={`status issue-button ${statusClass(issueStatus(i))}`}
+                                  onClick={() => updateParams({ issue: i.id, row: "" })}
+                                  aria-label={`${statusLabel(issueStatus(i))}：查看 ${row.id} ${i.ruleId} 錯誤`}
+                                >
+                                  {issueStatus(i) !== "new" ? (
+                                    <RotateCcw size={12} />
+                                  ) : (
+                                    <AlertCircle size={12} />
+                                  )}
+                                  {statusLabel(issueStatus(i))}
+                                  {issues.length > 1 && ` ${i.ruleId}`}
+                                </button>
+                              </Hint>
                             ))}
                           </div>
                         ) : (
@@ -439,10 +667,12 @@ export function Workspace({ report }: { report: Report }) {
                           </span>
                         )}
                       </td>
-                    </tr>
+                    </motion.tr>
                   );
                 })}
+                </AnimatePresence>
               </tbody>
+              </MotionConfig>
             </table>
             {!visibleRows.length && (
               <div className="table-empty">
@@ -468,9 +698,17 @@ export function Workspace({ report }: { report: Report }) {
           </div>
           <div className="table-hint">
             <CircleHelp size={15} />
-            點選錯誤標籤，查看規則與修正建議。
+            點選任一列查看內容；有錯誤的列會打開規則與修正建議。
           </div>
         </div>
+        {selectedRow && (
+          <RowPanel
+            key={`${version.id}:${selectedRow.id}`}
+            row={selectedRow}
+            columns={columns}
+            onClose={() => updateParams({ row: "" })}
+          />
+        )}
         {selected && (
           <SuggestionPanel
             key={`${version.id}:${selected.id}`}
@@ -481,6 +719,7 @@ export function Workspace({ report }: { report: Report }) {
           />
         )}
       </section>
+      </motion.div>
       <div className="workspace-bottom">
         <div>
           <ShieldCheck size={18} />
@@ -505,10 +744,16 @@ export function Workspace({ report }: { report: Report }) {
       {upload && (
         <UploadDialog
           report={report}
-          onClose={() => setUpload(false)}
+          initialFiles={droppedFiles}
+          onClose={() => {
+            setUpload(false);
+            setDroppedFiles([]);
+          }}
           onUploaded={(id) => {
+            setJustUploaded(id);
             updateParams({ version: id, issue: "", filter: "all" });
             setUpload(false);
+            setDroppedFiles([]);
           }}
         />
       )}

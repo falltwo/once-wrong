@@ -6,17 +6,40 @@ import {
   ChevronRight,
   CircleHelp,
   Files,
+  LampDesk,
   LayoutDashboard,
   ChartNoAxesCombined,
   ShieldCheck,
 } from "lucide-react";
 import { Dialog } from "./Dialog";
+import { AmbientLibrary } from "./AmbientLibrary";
+
+const ARCHIVE_KEY = "ow-archive-mode";
+const readArchive = () => {
+  try {
+    return window.localStorage.getItem(ARCHIVE_KEY) === "on";
+  } catch {
+    return false;
+  }
+};
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [help, setHelp] = useState(false);
+  // Archive mode: dark library backdrop for demos; remembered per browser, off by default.
+  const [archive, setArchive] = useState(readArchive);
+  const toggleArchive = () => {
+    const next = !archive;
+    setArchive(next);
+    try {
+      window.localStorage.setItem(ARCHIVE_KEY, next ? "on" : "off");
+    } catch {
+      // Storage can be blocked; the toggle still works for this visit.
+    }
+  };
   const location = useLocation();
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${archive ? "archive-mode" : ""}`}>
+      {archive && <AmbientLibrary />}
       <aside className="sidebar">
         <Link to="/reports" className="brand">
           <span className="brand-mark">
@@ -78,10 +101,20 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 : "報表檢核"}
             </span>
           </div>
-          <span className="demo-tag">
-            <span />
-            後端示範
-          </span>
+          <div className="topbar-actions">
+            <button
+              className={`archive-toggle ${archive ? "on" : ""}`}
+              aria-pressed={archive}
+              onClick={toggleArchive}
+            >
+              <LampDesk size={14} aria-hidden="true" />
+              檔案館模式
+            </button>
+            <span className="demo-tag">
+              <span />
+              後端示範
+            </span>
+          </div>
         </header>
         {children}
         <footer className="app-footer">
