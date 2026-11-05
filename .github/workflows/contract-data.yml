@@ -1,0 +1,39 @@
+name: Rule data integrity
+
+on:
+  pull_request:
+    paths:
+      - datasets/contracts/**
+      - .github/workflows/contract-data.yml
+  push:
+    branches: [main]
+    paths:
+      - datasets/contracts/**
+      - .github/workflows/contract-data.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: '3.11'
+          - os: windows-latest
+            python: '3.12'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install rule-data test dependencies
+        run: python -m pip install -r datasets/contracts/2026-10-28/requirements.txt
+      - name: Validate rule data and reference metadata offline
+        run: python datasets/contracts/2026-10-28/verify_dataset.py
+      - name: Test parametrized rule fixtures and public scope
+        run: python -m pytest datasets/contracts/2026-10-28/tests -q
+      - name: Ensure tracked data files were not modified
+        run: git diff --exit-code -- datasets/contracts/2026-10-28

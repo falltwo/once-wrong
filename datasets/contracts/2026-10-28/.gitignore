@@ -1,0 +1,7 @@
+generated/
+qa-previews/
+__pycache__/
+.venv/
+originals/
+*.pdf
+.pytest_cache/

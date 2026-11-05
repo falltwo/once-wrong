@@ -1,0 +1,453 @@
+{
+  "schema_version": "1.0",
+  "created_date": "2026-10-28",
+  "purpose": "申報手冊的代表性規則索引與合成測試案例草稿；非完整官方規則清單",
+  "rule_version": "local_source_interpretation_draft_2026-10-28",
+  "rule_count": 12,
+  "human_review_completed": false,
+  "current_backend": {
+    "file": "backend/once_wrong/validation.py",
+    "profile": "demo_csv_v1",
+    "rule_version": "demo_rules_v1",
+    "implemented_rules": [
+      "R-01 product不可空白",
+      "R-07 opening等於同CSV列previous"
+    ],
+    "note": "後端 PR #2 已合併 main；目前示範規則為 R-01／R-07。本清單 12 項尚未接入後端；normalized 案例不是可上傳 CSV 或官方定長 TXT。",
+    "integration_pr": "https://github.com/falltwo/once-wrong/pull/2",
+    "source_commit": "2db5658a4429b50fa4cdd900a43ea0fd01796cf2",
+    "availability": "backend_pr_2_merged_to_main"
+  },
+  "evidence_policy": "依已取得手冊保存本地檔名、非存取識別碼、SHA-256 與頁碼／章節；不公開主辦方提供的下載連結或存取識別碼。",
+  "rules": [
+    {
+      "rule_id": "CANCER.CRL.waiting_days_max",
+      "rule_version": "local_source_interpretation_draft_2026-10-28",
+      "domain": "cancer",
+      "title": "申報等待期上限245_01",
+      "interpretation": "在本癌症申報手冊適用範圍內，waiting_period_days <= 90；不將90天宣稱所有商品的實際等待期。",
+      "source_evidence": [
+        {
+          "source_id": "MANUAL-CANCER-2024",
+          "local_file": "official-materials/cancer-manual-2024.pdf",
+          "sha256": "39700faf7f8dacee2834e369241389a363b109eac5fc9cc877c117024170f3a1",
+          "physical_pages": [
+            67
+          ],
+          "section": null,
+          "source_codes": [
+            "245_01"
+          ],
+          "path_base": "reference_root",
+          "reference_scope": "external_project_reference_not_bundled"
+        }
+      ],
+      "required_inputs": [
+        "applicability",
+        "waiting_period_days"
+      ],
+      "review_status": "agent_draft",
+      "implementation_status": "not_implemented_in_current_backend",
+      "source_ambiguity": [],
+      "source_code_reuse_note": "來源代碼僅作 alias；內部 rule_id 才是本資料包的識別鍵。",
+      "scope_note": "僅判定本條邏輯，PASS 不表示整筆申報或合約全面合格。"
+    },
+    {
+      "rule_id": "CANCER.CRL.waiting_days_step",
+      "rule_version": "local_source_interpretation_draft_2026-10-28",
+      "domain": "cancer",
+      "title": "申報等待期十天倍數245_02",
+      "interpretation": "在本癌症申報手冊適用範圍內，waiting_period_days % 10 == 0；與245_01各自判定。",
+      "source_evidence": [
+        {
+          "source_id": "MANUAL-CANCER-2024",
+          "local_file": "official-materials/cancer-manual-2024.pdf",
+          "sha256": "39700faf7f8dacee2834e369241389a363b109eac5fc9cc877c117024170f3a1",
+          "physical_pages": [
+            67
+          ],
+          "section": null,
+          "source_codes": [
+            "245_02"
+          ],
+          "path_base": "reference_root",
+          "reference_scope": "external_project_reference_not_bundled"
+        }
+      ],
+      "required_inputs": [
+        "applicability",
+        "waiting_period_days"
+      ],
+      "review_status": "agent_draft",
+      "implementation_status": "not_implemented_in_current_backend",
+      "source_ambiguity": [],
+      "source_code_reuse_note": "來源代碼僅作 alias；內部 rule_id 才是本資料包的識別鍵。",
+      "scope_note": "僅判定本條邏輯，PASS 不表示整筆申報或合約全面合格。"
+    },
+    {
+      "rule_id": "CANCER.CRD.claim_after_wait",
+      "rule_version": "local_source_interpretation_draft_2026-10-28",
+      "domain": "cancer",
+      "title": "事故日與等待期",
+      "interpretation": "依311_04，以已知有效承保區間及起日＋申報等待期比較事故日；缺承保或歷史不能判通過。",
+      "source_evidence": [
+        {
+          "source_id": "MANUAL-CANCER-2024",
+          "local_file": "official-materials/cancer-manual-2024.pdf",
+          "sha256": "39700faf7f8dacee2834e369241389a363b109eac5fc9cc877c117024170f3a1",
+          "physical_pages": [
+            78
+          ],
+          "section": null,
+          "source_codes": [
+            "311_04"
+          ],
+          "path_base": "reference_root",
+          "reference_scope": "external_project_reference_not_bundled"
+        }
+      ],
+      "required_inputs": [
+        "claim",
+        "policy_at_incident",
+        "waiting_period_days"
+      ],
+      "review_status": "agent_draft",
+      "implementation_status": "not_implemented_in_current_backend",
+      "source_ambiguity": [],
+      "source_code_reuse_note": "來源代碼僅作 alias；內部 rule_id 才是本資料包的識別鍵。",
+      "scope_note": "僅判定本條邏輯，PASS 不表示整筆申報或合約全面合格。"
+    },
+    {
+      "rule_id": "CANCER.CRD.benefit_in_coverage",
+      "rule_version": "local_source_interpretation_draft_2026-10-28",
+      "domain": "cancer",
+      "title": "給付項目應有相對應承保保障",
+      "interpretation": "僅對已核對的舊有001–024映射，在事故時有效保障集合檢查給付項目；025–028改由爭議規則處理。",
+      "source_evidence": [
+        {
+          "source_id": "MANUAL-CANCER-2024",
+          "local_file": "official-materials/cancer-manual-2024.pdf",
+          "sha256": "39700faf7f8dacee2834e369241389a363b109eac5fc9cc877c117024170f3a1",
+          "physical_pages": [
+            24,
+            25,
+            27,
+            28,
+            78
+          ],
+          "section": null,
+          "source_codes": [
+            "313_01"
+          ],
+          "path_base": "reference_root",
+          "reference_scope": "external_project_reference_not_bundled"
+        }
+      ],
+      "required_inputs": [
+        "benefit_code",
+        "coverage_bitmask_50",
+        "policy_at_incident"
+      ],
+      "review_status": "agent_draft",
+      "implementation_status": "not_implemented_in_current_backend",
+      "source_ambiguity": [
+        "025–028之舊檢核限制不得直接套用。"
+      ],
+      "source_code_reuse_note": "來源代碼僅作 alias；內部 rule_id 才是本資料包的識別鍵。",
+      "scope_note": "僅判定本條邏輯，PASS 不表示整筆申報或合約全面合格。"
+    },
+    {
+      "rule_id": "CANCER.CRL.first_cancer_amount",
+      "rule_version": "local_source_interpretation_draft_2026-10-28",
+      "domain": "cancer",
+      "title": "首次罹癌保障與保額",
+      "interpretation": "承保範圍第3–7或22碼任一為1，首次罹癌保險金額不得為0；本包只測此前件成立情形。",
+      "source_evidence": [
+        {
+          "source_id": "MANUAL-CANCER-2024",
+          "local_file": "official-materials/cancer-manual-2024.pdf",
+          "sha256": "39700faf7f8dacee2834e369241389a363b109eac5fc9cc877c117024170f3a1",
+          "physical_pages": [
+            72
+          ],
+          "section": null,
+          "source_codes": [
+            "238"
+          ],
+          "path_base": "reference_root",
+          "reference_scope": "external_project_reference_not_bundled"
+        }
+      ],
+      "required_inputs": [
+        "coverage_bitmask_50",
+        "first_cancer_amount_ntd"
+      ],
+      "review_status": "agent_draft",
+      "implementation_status": "not_implemented_in_current_backend",
+      "source_ambiguity": [],
+      "source_code_reuse_note": "來源238同時出現在首次罹癌與癌症給付上限金額，不能只用238作唯一鍵。",
+      "scope_note": "僅判定本條邏輯，PASS 不表示整筆申報或合約全面合格。"
+    },
+    {
+      "rule_id": "CANCER.CODEBOOK.new_benefits_conflict",
+      "rule_version": "local_source_interpretation_draft_2026-10-28",
+      "domain": "cancer",
+      "title": "新增025–028與舊檢核範圍衝突",
+      "interpretation": "遇025–028與只到024的來源條文適用衝突，回NOT_EVALUATED，不自行宣判新保障或給付無效。",
+      "source_evidence": [
+        {
+          "source_id": "MANUAL-CANCER-2024",
+          "local_file": "official-materials/cancer-manual-2024.pdf",
+          "sha256": "39700faf7f8dacee2834e369241389a363b109eac5fc9cc877c117024170f3a1",
+          "physical_pages": [
+            25,
+            28,
+            72,
+            76
+          ],
+          "section": null,
+          "source_codes": [
+            "202_03"
+          ],
+          "path_base": "reference_root",
+          "reference_scope": "external_project_reference_not_bundled"
+        }
+      ],
+      "required_inputs": [
+        "codebook_version",
+        "rule_resolution"
+      ],
+      "review_status": "agent_draft",
+      "implementation_status": "not_implemented_in_current_backend",
+      "source_ambiguity": [
+        "碼表與給付新增025–028，但p72及p76部分條件仍截止024。"
+      ],
+      "source_code_reuse_note": "來源代碼僅作 alias；內部 rule_id 才是本資料包的識別鍵。",
+      "scope_note": "僅判定本條邏輯，PASS 不表示整筆申報或合約全面合格。"
+    },
+    {
+      "rule_id": "CANCER.SCOPE.long_term_only",
+      "rule_version": "local_source_interpretation_draft_2026-10-28",
+      "domain": "cancer",
+      "title": "一年期以下暫不納入癌症申報",
+      "interpretation": "依來源一年期以下暫不納入填報對象，本包將contract_duration_months <= 12列NOT_APPLICABLE；這是申報範圍，不表示合約無效。",
+      "source_evidence": [
+        {
+          "source_id": "MANUAL-CANCER-2024",
+          "local_file": "official-materials/cancer-manual-2024.pdf",
+          "sha256": "39700faf7f8dacee2834e369241389a363b109eac5fc9cc877c117024170f3a1",
+          "physical_pages": [
+            5
+          ],
+          "section": "壹、二、(二)",
+          "source_codes": [],
+          "path_base": "reference_root",
+          "reference_scope": "external_project_reference_not_bundled"
+        }
+      ],
+      "required_inputs": [
+        "domain",
+        "contract_duration_months"
+      ],
+      "review_status": "agent_draft",
+      "implementation_status": "not_implemented_in_current_backend",
+      "source_ambiguity": [],
+      "source_code_reuse_note": "來源代碼僅作 alias；內部 rule_id 才是本資料包的識別鍵。",
+      "scope_note": "僅判定本條邏輯，PASS 不表示整筆申報或合約全面合格。"
+    },
+    {
+      "rule_id": "ACCIDENT.CLAIM.incident_end_conflict",
+      "rule_version": "local_source_interpretation_draft_2026-10-28",
+      "domain": "accident",
+      "title": "事故日與保期迄日方向衝突",
+      "interpretation": "來源D15B03要求事故日<=迄日，但LD0L07要求>=事故時迄日；未有正式裁定時本爭議規則一律NOT_EVALUATED。",
+      "source_evidence": [
+        {
+          "source_id": "MANUAL-ACCIDENT",
+          "local_file": "official-materials/accident-manual.docx",
+          "sha256": "0282656b2eb3b7386ac473cc2cb367a20f31d64f8565f5e9570f5f488c35a27f",
+          "physical_pages": [],
+          "section": "陸、二給付資料檢核及陸、三承保資料與給付資料檢核；抽取表171/172",
+          "source_codes": [
+            "D15B03",
+            "LD0L07"
+          ],
+          "note": "未指定未經版面核對的Word實體頁碼；可由extracted/accident-manual-full.txt搜尋代碼定位。",
+          "path_base": "reference_root",
+          "reference_scope": "external_project_reference_not_bundled"
+        }
+      ],
+      "required_inputs": [
+        "policy_at_incident",
+        "incident_date",
+        "official_resolution"
+      ],
+      "review_status": "agent_draft",
+      "implementation_status": "not_implemented_in_current_backend",
+      "source_ambiguity": [
+        "兩條比較方向衝突；不得由一般常識替來源選邊。"
+      ],
+      "source_code_reuse_note": "來源代碼僅作 alias；內部 rule_id 才是本資料包的識別鍵。",
+      "scope_note": "僅判定本條邏輯，PASS 不表示整筆申報或合約全面合格。"
+    },
+    {
+      "rule_id": "ACCIDENT.PAL.company_amount_bounds",
+      "rule_version": "local_source_interpretation_draft_2026-10-28",
+      "domain": "accident",
+      "title": "公司提供投保上下限",
+      "interpretation": "依L33B07/08，NEW或NCT且意外死亡額>0時，需有公司另供的正值投保上下限，且實際額在界內；缺界限資料回NOT_EVALUATED。",
+      "source_evidence": [
+        {
+          "source_id": "MANUAL-ACCIDENT",
+          "local_file": "official-materials/accident-manual.docx",
+          "sha256": "0282656b2eb3b7386ac473cc2cb367a20f31d64f8565f5e9570f5f488c35a27f",
+          "physical_pages": [],
+          "section": "陸、一承保資料檢核；抽取表170",
+          "source_codes": [
+            "L33B07",
+            "L33B08"
+          ],
+          "path_base": "reference_root",
+          "reference_scope": "external_project_reference_not_bundled"
+        }
+      ],
+      "required_inputs": [
+        "contract_change_type",
+        "accidental_death_amount_ntd",
+        "company_bounds_at_underwriting"
+      ],
+      "review_status": "agent_draft",
+      "implementation_status": "not_implemented_in_current_backend",
+      "source_ambiguity": [
+        "公開條款或銷售頁所列範圍未必等於公司指定投保時上下限參照。"
+      ],
+      "source_code_reuse_note": "來源代碼僅作 alias；內部 rule_id 才是本資料包的識別鍵。",
+      "scope_note": "僅判定本條邏輯，PASS 不表示整筆申報或合約全面合格。"
+    },
+    {
+      "rule_id": "ANNUITY.AND.policy_in_current_or_history",
+      "rule_version": "local_source_interpretation_draft_2026-10-28",
+      "domain": "annuity",
+      "title": "年金給付可由歷史承保支持",
+      "interpretation": "當年或可靠歷史中有同公司、保單編號與序號才可就存在性判PASS；沒有當年ANL且缺歷史時回NOT_EVALUATED。",
+      "source_evidence": [
+        {
+          "source_id": "MANUAL-ANNUITY",
+          "local_file": "official-materials/annuity-manual.pdf",
+          "sha256": "dc91b86ed57db55e1628112b5fa8787b2bd477309a1201397e5107b6146b9cd7",
+          "physical_pages": [
+            3,
+            4,
+            71,
+            80,
+            81,
+            82,
+            89,
+            90,
+            124
+          ],
+          "section": null,
+          "source_codes": [
+            "303"
+          ],
+          "path_base": "reference_root",
+          "reference_scope": "external_project_reference_not_bundled"
+        }
+      ],
+      "required_inputs": [
+        "payment",
+        "current_underwriting",
+        "historical_underwriting_or_complete_snapshot"
+      ],
+      "review_status": "agent_draft",
+      "implementation_status": "not_implemented_in_current_backend",
+      "source_ambiguity": [],
+      "source_code_reuse_note": "303在多個跨檔規則重用；本條只取保單存在性語義，不套其他303條件。",
+      "scope_note": "僅判定本條邏輯，PASS 不表示整筆申報或合約全面合格。"
+    },
+    {
+      "rule_id": "ANNUITY.GUARANTEE.type_period_conflict",
+      "rule_version": "local_source_interpretation_draft_2026-10-28",
+      "domain": "annuity",
+      "title": "年金保證類型2與年期衝突",
+      "interpretation": "p19類型2為金額型且年期000，p126卻以類型2加保證期間計日期；在官方裁定前回NOT_EVALUATED。",
+      "source_evidence": [
+        {
+          "source_id": "MANUAL-ANNUITY",
+          "local_file": "official-materials/annuity-manual.pdf",
+          "sha256": "dc91b86ed57db55e1628112b5fa8787b2bd477309a1201397e5107b6146b9cd7",
+          "physical_pages": [
+            19,
+            126
+          ],
+          "section": "實體 p.19（印刷 p.17）表19及欄位32；實體 p.126（印刷 p.124）檢核說明表第1、2列",
+          "source_codes": [],
+          "path_base": "reference_root",
+          "reference_scope": "external_project_reference_not_bundled",
+          "note": "p.126 兩列僅標示重複使用的 L，未提供可對接引擎的明確檢核代碼；source_codes 留空，以頁碼及列次定位，待官方釐清。"
+        }
+      ],
+      "required_inputs": [
+        "guarantee_type",
+        "payment_date",
+        "official_resolution"
+      ],
+      "review_status": "agent_draft",
+      "implementation_status": "not_implemented_in_current_backend",
+      "source_ambiguity": [
+        "不得自行將p126的2改為1。"
+      ],
+      "source_code_reuse_note": "L 不是可對接引擎的明確檢核代碼，不列入 source_codes；本條以內部 rule_id 與頁碼／列次追蹤，待官方釐清後再建立代碼對應。",
+      "scope_note": "僅判定本條邏輯，PASS 不表示整筆申報或合約全面合格。"
+    },
+    {
+      "rule_id": "LIFE.LFD.benefit_type_current_manual",
+      "rule_version": "local_source_interpretation_draft_2026-10-28",
+      "domain": "life",
+      "title": "壽險給付種類新版碼表",
+      "interpretation": "依完整手冊p34給付種類1–6；僅對明確碼表做單欄檢查，舊偽碼1–3需留來源差異。",
+      "source_evidence": [
+        {
+          "source_id": "MANUAL-LIFE-2025",
+          "local_file": "official-materials/life-manual-2025.pdf",
+          "sha256": "3d94805d1892c0b80f743f27cfe54e051219ab935b2a036b6551621bf1dbf7dc",
+          "physical_pages": [
+            34,
+            35,
+            36
+          ],
+          "section": "給付資料欄位說明",
+          "source_codes": [],
+          "path_base": "reference_root",
+          "reference_scope": "external_project_reference_not_bundled"
+        },
+        {
+          "source_id": "RULES-LIFE-2025",
+          "local_file": "official-materials/life-rules-2025.pdf",
+          "sha256": "3003e7cf521fb6cc0f69f888ba769a7394f490bd274a9a38dc687e3ae13ca660",
+          "physical_pages": [
+            58,
+            111
+          ],
+          "section": "伍-26 給付類別代碼檢核（D0102）；實體 p.111 偽程式碼保留 1–3 的來源差異",
+          "source_codes": [
+            "D0102"
+          ],
+          "path_base": "reference_root",
+          "reference_scope": "external_project_reference_not_bundled"
+        }
+      ],
+      "required_inputs": [
+        "benefit_type",
+        "explicit_schema_profile"
+      ],
+      "review_status": "agent_draft",
+      "implementation_status": "not_implemented_in_current_backend",
+      "source_ambiguity": [
+        "舊偽碼僅1–3；本包明示採完整手冊1–6作局部碼表草稿，不宣稱已獲官方裁定。"
+      ],
+      "source_code_reuse_note": "來源代碼僅作 alias；內部 rule_id 才是本資料包的識別鍵。",
+      "scope_note": "僅判定本條邏輯，PASS 不表示整筆申報或合約全面合格。"
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+# Python >= 3.11. Offline rule-data tests need no model SDK or credentials.
+pytest>=8,<10
