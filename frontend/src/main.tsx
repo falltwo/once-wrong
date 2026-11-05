@@ -6,6 +6,7 @@ import App from "./App";
 import { MotionConfig } from "framer-motion";
 import { HintProvider } from "./components/Hint";
 import "./styles.css";
+import "./features/versions/archival.css";
 
 const client = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },

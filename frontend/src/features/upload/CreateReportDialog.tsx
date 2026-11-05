@@ -15,6 +15,7 @@ export function CreateReportDialog({ onClose }: { onClose: () => void }) {
   const client = useQueryClient();
   const navigate = useNavigate();
   const mutation = useMutation({
+    mutationKey: ["create-report"],
     mutationFn: () => reportsApi.create(name.trim(), period, files, bundle),
     onSuccess: async (report) => {
       await client.invalidateQueries({ queryKey: ["reports"] });

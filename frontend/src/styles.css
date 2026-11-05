@@ -692,15 +692,14 @@ main {
   padding-bottom: 24px;
 }
 /* Inline fix: error vs compared cell, connector, suggestion pill, draft value. */
-/* Selected error cells lift toward the viewer (2.5D) and breathe a red glow, tying them
-   to the open error detail. */
+/* Keep cell borders in the table's layout plane; only their colour/glow changes. */
 .cell-focus-error,
 .cell-focus-compare {
   position: relative;
   z-index: 1;
   background-color: #fff;
-  transform: translateY(-2px) scale(1.04);
-  transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transform: none;
+  transition: background-color 0.3s, box-shadow 0.3s;
   box-shadow: 0 6px 14px rgb(120 40 25 / 18%);
   animation: cell-focus-pulse 1.8s ease-in-out infinite;
 }
@@ -890,6 +889,7 @@ td {
 }
 .has-selection .selected-row td {
   position: relative;
+  padding-bottom: 30px;
   background-color: #fffdf7;
   box-shadow:
     0 -6px 12px -10px rgb(60 40 20 / 35%),
@@ -2419,87 +2419,11 @@ dialog::backdrop {
   }
 }
 
-/* 2.5D version stack (features/versions/VersionStack). */
+/* Page heading actions. Version navigation lives in the archival drawer below. */
 .heading-actions {
   display: flex;
   align-items: center;
   gap: 18px;
-}
-.version-stack {
-  position: relative;
-  width: 150px;
-  height: 78px;
-  perspective: 600px;
-}
-.stack-card {
-  position: absolute;
-  left: 18px;
-  top: 4px;
-  width: 92px;
-  height: 58px;
-  padding: 6px 8px;
-  border: 1px solid #d8ddd1;
-  border-radius: 6px;
-  background: #fff;
-  color: #4d5c44;
-  font-size: 10px;
-  text-align: left;
-  cursor: pointer;
-  transform-origin: center;
-  /* Each older layer sits lower and further back; isometric-style tilt. */
-  transform: rotateX(48deg) rotateZ(-38deg)
-    translate3d(calc(var(--layer) * 9px), calc(var(--layer) * -9px), calc(var(--layer) * 6px));
-  opacity: 0.55;
-  box-shadow: 0 2px 4px rgb(37 60 50 / 10%);
-  z-index: var(--layer);
-  transition:
-    transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1),
-    opacity 0.3s,
-    box-shadow 0.45s;
-}
-.stack-card.current {
-  /* Lifted above the rest: higher, fully opaque, deeper shadow. */
-  transform: rotateX(48deg) rotateZ(-38deg)
-    translate3d(calc(var(--layer) * 9px), calc(var(--layer) * -9px), 34px);
-  opacity: 1;
-  border-color: var(--green);
-  box-shadow:
-    0 18px 22px rgb(37 60 50 / 22%),
-    0 0 0 1px var(--green);
-  z-index: 10;
-}
-.stack-card:hover:not(.current),
-.stack-card:focus-visible:not(.current) {
-  opacity: 0.85;
-}
-.stack-card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-.stack-card-head strong {
-  font-size: 11px;
-}
-.stack-dots {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  margin-top: 6px;
-}
-.stack-dots i {
-  width: 6px;
-  height: 6px;
-  border-radius: 1.5px;
-  background: #b9d3a8;
-}
-.stack-dots i.bad {
-  background: #c4523d;
-}
-@media (max-width: 720px) {
-  /* The timeline already switches versions; the stack is decoration on small screens. */
-  .version-stack {
-    display: none;
-  }
 }
 
 /* Dragging files over the workspace: the results card recedes, a drop target comes forward. */

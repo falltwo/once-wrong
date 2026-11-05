@@ -25,6 +25,8 @@ export function UploadDialog({
   const [dragging, setDragging] = useState(false);
   const client = useQueryClient();
   const mutation = useMutation({
+    mutationKey: ["upload-version"],
+    meta: { reportId: report.id },
     mutationFn: () => reportsApi.upload(report.id, files, bundle),
     onSuccess: async (version) => {
       await Promise.all([
