@@ -117,6 +117,19 @@ export interface BackendHealth {
   };
 }
 
+export interface Citation {
+  id: string;
+  source: string;
+  section: string[];
+  page?: number | null;
+  /** 知識庫裡這段手冊的原文（從 PDF 抽出的文字）；後端提供時才有。 */
+  excerpt?: string;
+  /** AI 依據、且後端逐字核對過出現在 excerpt 裡的句子。 */
+  quote?: string | null;
+  /** 後端有提供原始手冊時，開到該頁的相對網址。 */
+  pdfUrl?: string | null;
+}
+
 export interface Suggestion {
   title: string;
   explanation: string;
@@ -133,12 +146,9 @@ export interface Suggestion {
     }>;
   } | null;
   rejectedSuggestions: string[];
-  citations: Array<{
-    id: string;
-    source: string;
-    section: string[];
-    page?: number | null;
-  }>;
+  citations: Citation[];
+  /** AI 宣稱引用、但對不上手冊原文的句子；後端提供時才有。 */
+  rejectedQuotes?: string[];
   blockedNumbers: string[];
   model: string;
   verification: "passed" | "unavailable";

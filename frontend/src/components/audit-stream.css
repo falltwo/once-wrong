@@ -1,0 +1,209 @@
+.audit-panel {
+  position: relative;
+  min-height: 224px;
+  padding-top: 20px;
+}
+.audit-panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #6c806b;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+}
+.audit-panel-heading small {
+  margin-left: auto;
+  font-size: 8px;
+  letter-spacing: 0.02em;
+  color: #92998b;
+}
+.audit-panel-light {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #95a68a;
+}
+.is-streaming .audit-panel-light {
+  background: #658959;
+  box-shadow: 0 0 0 3px #65895918;
+}
+.audit-panel-body {
+  position: relative;
+  min-height: 175px;
+  margin-top: 13px;
+}
+.audit-idle-copy {
+  padding: 5px 0 0;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 400ms,
+    transform 500ms cubic-bezier(0.2, 0.85, 0.2, 1.15);
+}
+.is-streaming .audit-idle-copy {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+.audit-console {
+  position: absolute;
+  inset: 0;
+  padding: 9px 8px 8px;
+  overflow: hidden;
+  border: 1px solid #32503e;
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 3px, #a5d69a05 3px 4px),
+    radial-gradient(ellipse at 50% 0, #294a35, transparent 80%), #17291f;
+  box-shadow:
+    inset 0 0 14px #07160e55,
+    0 3px 12px #233f2d13;
+  color: #b1ce9e;
+  font-family: "Cascadia Code", "Consolas", monospace;
+  animation: audit-console-open 180ms ease-out;
+}
+.audit-console-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #a5cf921a;
+  font-size: 6.5px;
+  letter-spacing: 0.08em;
+  color: #7c9b70;
+}
+.audit-console-label > span:last-child {
+  color: #adbc90;
+}
+.audit-code-window {
+  height: 119px;
+  overflow: hidden;
+  padding-top: 8px;
+  mask-image: linear-gradient(transparent, #000 5px, #000);
+}
+.audit-code-lines {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 108px;
+}
+.audit-code-line {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-height: 17px;
+  color: #9ab18f;
+  font-size: 8px;
+  line-height: 17px;
+  white-space: nowrap;
+  letter-spacing: -0.12px;
+  animation: audit-line-rise 120ms ease-out both;
+}
+.audit-code-line > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.audit-code-index {
+  flex: none;
+  color: #55724e;
+  font-size: 7px;
+  font-variant-numeric: tabular-nums;
+}
+.audit-code-line.good {
+  color: #c2eaa5;
+}
+.audit-code-line.warning {
+  color: #dfc58a;
+}
+.audit-code-line.error {
+  color: #f3b39d;
+}
+.audit-code-line.demo {
+  color: #bab3df;
+}
+.audit-code-line:last-child {
+  text-shadow: 0 0 8px #8dc26b50;
+}
+.audit-console-footer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-top: 6px;
+  border-top: 1px solid #a5cf921a;
+  font-size: 7px;
+  color: #98ad89;
+}
+.audit-console-footer > span {
+  width: 4px;
+  height: 6px;
+  background: #a4c488;
+}
+.audit-cursor {
+  animation: audit-cursor-blink 850ms steps(2, start) infinite;
+}
+.audit-accessible-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.archive-mode .audit-panel-heading {
+  color: #8e7b53;
+}
+.archive-mode .audit-console {
+  border-color: #6d6243;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 3px, #e4d18a05 3px 4px),
+    radial-gradient(ellipse at 50% 0, #494833, transparent 80%), #252d21;
+}
+.archive-mode .audit-panel-light {
+  background: #a49060;
+}
+.archive-mode .is-streaming .audit-panel-light {
+  box-shadow: 0 0 0 3px #a4906018;
+}
+@keyframes audit-console-open {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes audit-line-rise {
+  from {
+    opacity: 0.3;
+    transform: translateY(12px);
+    filter: blur(1px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+@keyframes audit-cursor-blink {
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .audit-idle-copy {
+    transition: none;
+    transform: none;
+  }
+  .is-streaming .audit-idle-copy {
+    transform: none;
+  }
+  .audit-console,
+  .audit-code-line,
+  .audit-cursor {
+    animation: none;
+  }
+}

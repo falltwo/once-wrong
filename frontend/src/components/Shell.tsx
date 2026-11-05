@@ -1,22 +1,49 @@
 import { useState } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   ArrowDownToLine,
   Check,
   ChevronRight,
   CircleHelp,
   Files,
+  LampDesk,
   LayoutDashboard,
   ChartNoAxesCombined,
-  ShieldCheck,
 } from "lucide-react";
 import { Dialog } from "./Dialog";
+import { AmbientLibrary } from "./AmbientLibrary";
+import { MagneticNavLink } from "./MagneticNavLink";
+import { AuditStream } from "./AuditStream";
+import { WorkspaceSwitcher, useWorkspaceScenes } from "./WorkspaceSwitcher";
+import { DataPipeline } from "./DataPipeline";
+
+const ARCHIVE_KEY = "ow-archive-mode";
+const readArchive = () => {
+  try {
+    return window.localStorage.getItem(ARCHIVE_KEY) === "on";
+  } catch {
+    return false;
+  }
+};
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [help, setHelp] = useState(false);
+  // Archive mode: dark library backdrop for demos; remembered per browser, off by default.
+  const [archive, setArchive] = useState(readArchive);
+  const toggleArchive = () => {
+    const next = !archive;
+    setArchive(next);
+    try {
+      window.localStorage.setItem(ARCHIVE_KEY, next ? "on" : "off");
+    } catch {
+      // Storage can be blocked; the toggle still works for this visit.
+    }
+  };
   const location = useLocation();
+  const scenes = useWorkspaceScenes();
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${archive ? "archive-mode" : ""}`}>
+      {archive && <AmbientLibrary />}
       <aside className="sidebar">
         <Link to="/reports" className="brand">
           <span className="brand-mark">
@@ -27,43 +54,30 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </span>
         </Link>
         <div className="workspace-label">WORKSPACE</div>
-        <nav>
-          <NavLink
-            to="/reports"
-            className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
-          >
-            <LayoutDashboard size={18} />
+        <nav aria-label="主要導覽">
+          <MagneticNavLink to="/reports" icon={<LayoutDashboard size={18} />}>
             報表檢核
-          </NavLink>
-          <NavLink
+          </MagneticNavLink>
+          <MagneticNavLink
             to="/evaluation"
-            className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
+            icon={<ChartNoAxesCombined size={18} />}
           >
-            <ChartNoAxesCombined size={18} />
             測試結果
-          </NavLink>
+          </MagneticNavLink>
         </nav>
-        <div className="sidebar-note">
-          <ShieldCheck size={24} />
-          <strong>每次修正，都有依據。</strong>
-          <p>
-            規則把關，AI 說明。
-            <br />
-            讓下一版更接近正確。
-          </p>
-        </div>
+        <AuditStream />
         <div className="sidebar-bottom">
           <button onClick={() => setHelp(true)}>
             <CircleHelp size={18} />
             使用說明
           </button>
-          <div className="profile">
-            <span className="avatar">OW</span>
-            <div>
-              展示工作空間<small>前後端原型 · 模擬資料</small>
-            </div>
-            <span className="online-dot" />
-          </div>
+          <WorkspaceSwitcher
+            label={scenes.label}
+            current={scenes.current}
+            busy={scenes.busy}
+            uploading={scenes.uploading}
+            onSelect={scenes.select}
+          />
         </div>
       </aside>
       <div className="main-shell">
@@ -78,17 +92,55 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 : "報表檢核"}
             </span>
           </div>
-          <span className="demo-tag">
-            <span />
-            後端示範
-          </span>
+          <div className="topbar-actions">
+            <WorkspaceSwitcher
+              compact
+              label={scenes.label}
+              current={scenes.current}
+              busy={scenes.busy}
+              uploading={scenes.uploading}
+              onSelect={scenes.select}
+            />
+            <button
+              className={`archive-toggle ${archive ? "on" : ""}`}
+              aria-pressed={archive}
+              onClick={toggleArchive}
+            >
+              <LampDesk size={14} aria-hidden="true" />
+              檔案館模式
+            </button>
+            <span className="demo-tag">
+              <span />
+              後端示範
+            </span>
+          </div>
         </header>
-        {children}
+        {scenes.error && (
+          <div className="workspace-switch-error" role="alert">
+            {scenes.error}
+          </div>
+        )}
+        <div className="workspace-flip-stage" aria-busy={scenes.busy}>
+          {scenes.busy && (
+            <div className="workspace-flip-underlay" role="status">
+              <span className="flip-underlay-mark">OW</span>
+              <strong>正在載入展示場景</strong>
+              <small>共用本機沙盒 · 合成資料</small>
+            </div>
+          )}
+          <div
+            className={`workspace-flip-surface ${scenes.phase ? `flip-${scenes.phase}` : ""}`}
+            inert={scenes.busy}
+          >
+            {children}
+          </div>
+        </div>
         <footer className="app-footer">
           <span>Once Wrong · 讓每一次修正，都能被驗證</span>
           <span>後端示範規則 · 僅記錄內部確認，不對外申報</span>
         </footer>
       </div>
+      <DataPipeline />
       {help && (
         <Dialog title="開始使用 Once Wrong" onClose={() => setHelp(false)}>
           <p>

@@ -7,21 +7,26 @@ import { Dialog } from "../../components/Dialog";
 
 export function UploadDialog({
   report,
+  initialFiles = [],
   onClose,
   onUploaded,
 }: {
   report: Report;
+  /** Files dropped onto the workspace before the dialog opened. */
+  initialFiles?: File[];
   onClose: () => void;
   onUploaded: (id: string) => void;
 }) {
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<File[]>(initialFiles);
   const [bundle, setBundle] = useState(
-    Boolean(report.versions.at(-1)?.files?.length),
+    Boolean(report.versions.at(-1)?.files?.length) || initialFiles.length > 1,
   );
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const client = useQueryClient();
   const mutation = useMutation({
+    mutationKey: ["upload-version"],
+    meta: { reportId: report.id },
     mutationFn: () => reportsApi.upload(report.id, files, bundle),
     onSuccess: async (version) => {
       await Promise.all([

@@ -1,0 +1,333 @@
+.workspace-switcher {
+  position: relative;
+  min-width: 0;
+}
+.workspace-profile {
+  width: 100%;
+  border-inline: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  padding-inline: 0;
+  background: transparent;
+  text-align: left;
+  justify-content: flex-start;
+  gap: 9px;
+}
+.workspace-profile:hover:not(:disabled) {
+  background: transparent;
+}
+.workspace-profile .avatar {
+  flex: none;
+}
+.workspace-profile-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.workspace-profile-label small {
+  font-size: 9px;
+  color: #8b9081;
+  font-weight: 400;
+}
+.workspace-profile > svg {
+  margin-left: auto;
+  color: #89917f;
+}
+.workspace-profile:focus-visible {
+  outline: 2px solid #9b8554;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.workspace-profile.is-switching .avatar {
+  animation: workspace-avatar-spin 650ms cubic-bezier(0.3, 0.05, 0.5, 1)
+    infinite;
+}
+.workspace-picker {
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 0;
+  z-index: 35;
+  width: 285px;
+  max-width: calc(100vw - 36px);
+  padding: 11px;
+  border: 1px solid #d9d1bc;
+  border-radius: 10px;
+  background: #fffdf6;
+  box-shadow:
+    0 18px 50px #263b2926,
+    0 2px 5px #263b2910;
+  animation: workspace-picker-in 180ms ease-out;
+}
+.workspace-picker-title {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px 13px;
+}
+.workspace-picker-title > span {
+  font-size: 8px;
+  letter-spacing: 0.17em;
+  color: #9a875d;
+}
+.workspace-picker-title > strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #3e513c;
+}
+.workspace-picker > button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 10px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  justify-content: flex-start;
+  border-radius: 6px;
+  color: #5b6654;
+}
+.workspace-picker > button + button {
+  margin-top: 4px;
+}
+.workspace-picker > button.selected {
+  background: #eef0e5;
+  color: #405c3d;
+}
+.workspace-picker > button:hover {
+  background: #e9ecde;
+}
+.workspace-picker > button > span {
+  flex: 1;
+  font-size: 12px;
+}
+.workspace-picker small {
+  display: block;
+  margin-top: 4px;
+  color: #8b8c7b;
+  font-size: 10px;
+}
+.workspace-picker p {
+  margin: 11px 8px 4px;
+  padding-top: 10px;
+  border-top: 1px solid #e4decf;
+  font-size: 10px;
+  line-height: 1.8;
+  color: #8a816d;
+}
+.workspace-switcher.compact {
+  display: none;
+}
+.workspace-switcher.compact .workspace-profile {
+  width: auto;
+  margin: 0;
+  padding: 5px;
+  border: 0;
+}
+.workspace-switcher.compact .avatar {
+  width: 27px;
+  height: 27px;
+  font-size: 10px;
+}
+.workspace-switcher.compact .workspace-picker {
+  top: calc(100% + 12px);
+  bottom: auto;
+  left: auto;
+  right: 0;
+}
+.workspace-switch-error {
+  margin: 14px 32px 0;
+  padding: 10px 14px;
+  border: 1px solid #dca58d;
+  border-radius: 4px;
+  background: #fff2e9;
+  color: #9f513b;
+  font-size: 12px;
+}
+.workspace-flip-stage {
+  position: relative;
+  perspective: 1900px;
+  min-width: 0;
+  flex: 1;
+}
+.workspace-flip-surface {
+  position: relative;
+  backface-visibility: hidden;
+  transform-origin: 50% 40vh;
+}
+.workspace-flip-surface.flip-out {
+  animation: workspace-flip-out 460ms cubic-bezier(0.4, 0.05, 0.65, 1) both;
+  pointer-events: none;
+}
+.workspace-flip-surface.flip-in {
+  animation: workspace-flip-in 480ms cubic-bezier(0.15, 0.7, 0.2, 1) both;
+  pointer-events: none;
+}
+.workspace-flip-underlay {
+  position: absolute;
+  inset: 10px 20px 20px;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  padding-top: 25vh;
+  gap: 14px;
+  border: 1px solid #d9ceae;
+  border-radius: 8px;
+  background:
+    linear-gradient(#b0a1770a 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(90deg, #b0a1770a 1px, transparent 1px) 0 0 / 28px 28px,
+    radial-gradient(ellipse at 50% 30%, #fffdf4, #ece9da);
+  color: #6e7059;
+}
+.flip-underlay-mark {
+  display: grid;
+  place-items: center;
+  width: 65px;
+  height: 65px;
+  border: 1px solid #ac9665;
+  outline: 1px solid #ac96654d;
+  outline-offset: 5px;
+  border-radius: 14px;
+  color: #9a8350;
+  font-family: serif;
+  font-size: 25px;
+}
+.workspace-flip-underlay strong {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+}
+.workspace-flip-underlay small {
+  font-size: 10px;
+  color: #918b74;
+}
+@keyframes workspace-avatar-spin {
+  to {
+    transform: rotateY(360deg) rotateZ(12deg);
+  }
+}
+@keyframes workspace-picker-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes workspace-flip-out {
+  from {
+    transform: rotateY(0deg) scale(1);
+    filter: brightness(1);
+  }
+  to {
+    transform: rotateY(90deg) scale(0.94);
+    filter: brightness(0.65);
+  }
+}
+@keyframes workspace-flip-in {
+  from {
+    transform: rotateY(-90deg) scale(0.94);
+    filter: brightness(0.65);
+  }
+  to {
+    transform: rotateY(0deg) scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* A manual, non-interactive top-layer popover can travel above the upload dialog. */
+.pipeline-overlay {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 300;
+}
+.pipeline-overlay::backdrop {
+  background: transparent;
+  pointer-events: none;
+}
+.pipeline-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.pipeline-rail-glow {
+  fill: none;
+  stroke: #d6bf79;
+  stroke-width: 2;
+  opacity: 0.45;
+  filter: drop-shadow(0 0 4px #e0ce8e);
+}
+.pipeline-flight-path {
+  fill: none;
+  stroke: #d3bf8070;
+  stroke-width: 1;
+  stroke-dasharray: 2 6;
+}
+.pipeline-spark-waiting {
+  animation: pipeline-wait 1s ease-in-out infinite;
+}
+.pipeline-spark-failure {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pipeline-fail 450ms ease-out both;
+}
+@keyframes pipeline-wait {
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes pipeline-fail {
+  to {
+    opacity: 0;
+    transform: scale(2.5);
+  }
+}
+@media (max-width: 960px) {
+  .workspace-switcher.compact {
+    display: block;
+  }
+  .workspace-switcher.compact .workspace-profile-label small {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .workspace-switcher.compact .workspace-profile-label {
+    display: none;
+  }
+  .workspace-flip-underlay {
+    inset-inline: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-profile.is-switching .avatar,
+  .workspace-picker {
+    animation: none;
+  }
+  .workspace-flip-surface.flip-out,
+  .workspace-flip-surface.flip-in {
+    animation: none;
+    transform: none;
+    filter: none;
+  }
+  .pipeline-overlay {
+    display: none;
+  }
+}
